@@ -1,26 +1,91 @@
 @import "tailwindcss";
 
+/*
+ * Free Feel Toy — design tokens
+ * See docs/design-tokens.md for the full rationale.
+ * Values here are provisional until the official logo / brand colors are
+ * confirmed (docs/project-card.md F-7 / F-8). Update tokens only — do not
+ * hardcode colors in components.
+ */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Brand common tokens (unchanged across domains) */
+  --ffl-color-black-deep: #100d0a;
+  --ffl-color-black-base: #181410;
+  --ffl-color-iron: #28221c;
+  --ffl-color-walnut: #4e3826;
+  --ffl-color-walnut-dark: #2e2015;
+  --ffl-color-brass: #b98a4e;
+  --ffl-color-ivory: #f1e8d6;
+  --ffl-color-ivory-muted: #c9bea6;
+  --ffl-color-orange: #e37b2c;
+  --ffl-color-orange-soft: #f0a860;
+
+  /* Default theme = HOME */
+  --theme-bg-deep: var(--ffl-color-black-deep);
+  --theme-bg-panel: var(--ffl-color-iron);
+  --theme-accent: var(--ffl-color-orange);
+  --theme-accent-glow: var(--ffl-color-brass);
+  --theme-text-heading: var(--ffl-color-ivory);
+}
+
+/* Domain theme overrides — the only place a domain's look is defined. */
+[data-domain="garage"] {
+  --theme-bg-deep: #100d0a;
+  --theme-bg-panel: #221d18;
+  --theme-accent: #e4601a;
+  --theme-accent-glow: #b8532a;
+  --theme-text-heading: var(--ffl-color-ivory);
+}
+
+[data-domain="lab"] {
+  --theme-bg-deep: #0a0d12;
+  --theme-bg-panel: #12161d;
+  --theme-accent: #3e90e6;
+  --theme-accent-glow: #15304a;
+  --theme-text-heading: #eef1f5;
+}
+
+[data-domain="living"] {
+  --theme-bg-deep: #f4ecdd;
+  --theme-bg-panel: #ede4d2;
+  --theme-accent: #7f9862;
+  --theme-accent-glow: #8a6239;
+  --theme-text-heading: #2a241c;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-brand-black-deep: var(--ffl-color-black-deep);
+  --color-brand-black-base: var(--ffl-color-black-base);
+  --color-brand-iron: var(--ffl-color-iron);
+  --color-brand-walnut: var(--ffl-color-walnut);
+  --color-brand-walnut-dark: var(--ffl-color-walnut-dark);
+  --color-brand-brass: var(--ffl-color-brass);
+  --color-brand-ivory: var(--ffl-color-ivory);
+  --color-brand-ivory-muted: var(--ffl-color-ivory-muted);
+  --color-brand-orange: var(--ffl-color-orange);
+  --color-brand-orange-soft: var(--ffl-color-orange-soft);
+
+  --color-theme-bg-deep: var(--theme-bg-deep);
+  --color-theme-bg-panel: var(--theme-bg-panel);
+  --color-theme-accent: var(--theme-accent);
+  --color-theme-accent-glow: var(--theme-accent-glow);
+  --color-theme-text-heading: var(--theme-text-heading);
+
+  --font-heading: var(--font-heading-anton);
+  --font-script: var(--font-script-marker);
+  --font-body: var(--font-body-noto);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+/* Global "quietly amazing" motion rule: honor reduced-motion everywhere,
+   even for utilities that don't opt in via motion-safe:. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
 }
