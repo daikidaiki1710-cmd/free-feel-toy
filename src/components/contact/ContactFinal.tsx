@@ -1,0 +1,190 @@
+"use client";
+
+import Image from "next/image";
+import Link from "next/link";
+import { useId, useState, type FormEvent } from "react";
+
+type CategoryId = "garage" | "lab" | "living" | "other";
+
+const categories: { id: CategoryId; label: string; domain?: "garage" | "lab" | "living" }[] = [
+  { id: "garage", label: "GARAGE", domain: "garage" },
+  { id: "lab", label: "LAB", domain: "lab" },
+  { id: "living", label: "LIVING", domain: "living" },
+  { id: "other", label: "OTHER" },
+];
+
+const footerNav = [
+  { label: "ABOUT", href: "/about", left: 32, width: 7 },
+  { label: "GARAGE", href: "/garage", left: 39.5, width: 7.5 },
+  { label: "LAB", href: "/lab", left: 50, width: 6 },
+  { label: "LIVING", href: "/living", left: 58, width: 8 },
+  { label: "CONTACT", href: "/contact", left: 67.5, width: 10 },
+];
+
+/**
+ * Final approved CONTACT visual — a single unmodified photo/mock
+ * (docs/design-tokens.md), same pattern as GARAGE/LAB/LIVING. The image is
+ * the design, form included; only real navigation + a working form are
+ * layered on top. Desktop (1536x1024 source) only for now — no mobile crop
+ * has been approved yet.
+ */
+export function ContactFinal() {
+  const [category, setCategory] = useState<CategoryId | null>(null);
+  const [submitted, setSubmitted] = useState(false);
+  const nameId = useId();
+  const emailId = useId();
+  const phoneId = useId();
+  const messageId = useId();
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setSubmitted(true);
+  };
+
+  return (
+    <section className="relative aspect-[1536/1024] w-full bg-black">
+      <Image
+        src="/contact/contact-final.jpg"
+        alt="Free Feel Toy CONTACT — 木の作業台と道具に囲まれた秘密基地のようなワークショップ。お問い合わせフォーム。"
+        fill
+        priority
+        sizes="100vw"
+        className="object-cover object-top"
+      />
+
+      {/* Header nav hit areas */}
+      <Link
+        href="/"
+        aria-label="Free Feel Toy ホームへ"
+        className="absolute left-[0.5%] top-[0.5%] h-[8%] w-[12.5%] min-h-11 min-w-11"
+      />
+      <Link href="/about" aria-label="ABOUT ページへ" className="absolute left-[27.5%] top-[2.3%] h-[3.3%] w-[6%] min-h-11" />
+      <Link href="/garage" aria-label="GARAGE ページへ" className="absolute left-[36.3%] top-[2.3%] h-[3.3%] w-[7.2%] min-h-11" />
+      <Link href="/lab" aria-label="LAB ページへ" className="absolute left-[46.5%] top-[2.3%] h-[3.3%] w-[4%] min-h-11" />
+      <Link href="/living" aria-label="LIVING ページへ" className="absolute left-[55.2%] top-[2.3%] h-[3.3%] w-[6%] min-h-11" />
+      <Link href="/contact" aria-label="CONTACT ページへ" className="absolute left-[63.3%] top-[2.3%] h-[4%] w-[6.2%] min-h-11" />
+      <Link
+        href="/contact"
+        aria-label="お問い合わせフォームへ"
+        className="absolute left-[86.3%] top-[0.5%] h-[8%] w-[12%] min-h-11 min-w-11"
+      />
+
+      {/* Contact form — real inputs positioned over the approved form panel. */}
+      <form onSubmit={handleSubmit} className="contents">
+        <label htmlFor={nameId} className="sr-only">
+          お名前
+        </label>
+        <input
+          id={nameId}
+          name="name"
+          type="text"
+          required
+          placeholder=" "
+          aria-label="お名前"
+          className="absolute left-[55.8%] top-[22.9%] h-[4.7%] w-[19.8%] rounded-md border border-transparent bg-transparent px-[1%] font-body text-[1vw] text-brand-black-deep outline-none placeholder:text-transparent focus:border-brand-black-deep/25 focus:bg-white/60 not-placeholder-shown:border-brand-black-deep/20 not-placeholder-shown:bg-white/95"
+        />
+
+        <label htmlFor={emailId} className="sr-only">
+          メールアドレス
+        </label>
+        <input
+          id={emailId}
+          name="email"
+          type="email"
+          required
+          placeholder=" "
+          aria-label="メールアドレス"
+          className="absolute left-[78.4%] top-[22.9%] h-[4.7%] w-[19.3%] rounded-md border border-transparent bg-transparent px-[1%] font-body text-[1vw] text-brand-black-deep outline-none placeholder:text-transparent focus:border-brand-black-deep/25 focus:bg-white/60 not-placeholder-shown:border-brand-black-deep/20 not-placeholder-shown:bg-white/95"
+        />
+
+        <label htmlFor={phoneId} className="sr-only">
+          電話番号
+        </label>
+        <input
+          id={phoneId}
+          name="phone"
+          type="tel"
+          placeholder=" "
+          aria-label="電話番号"
+          className="absolute left-[55.8%] top-[31.7%] h-[4.8%] w-[19.8%] rounded-md border border-transparent bg-transparent px-[1%] font-body text-[1vw] text-brand-black-deep outline-none placeholder:text-transparent focus:border-brand-black-deep/25 focus:bg-white/60 not-placeholder-shown:border-brand-black-deep/20 not-placeholder-shown:bg-white/95"
+        />
+
+        <fieldset className="contents">
+          <legend className="sr-only">何について相談しますか？</legend>
+          {categories.map((item, index) => {
+            const left = [55.8, 66.6, 77.45, 88.5][index];
+            const width = [9.7, 9.7, 9.9, 9.4][index];
+            return (
+              <label
+                key={item.id}
+                data-domain={item.domain}
+                className="absolute top-[41.9%] h-[7.5%] cursor-pointer rounded-lg border-2 border-transparent has-[:checked]:border-theme-accent"
+                style={{ left: `${left}%`, width: `${width}%` }}
+              >
+                <input
+                  type="radio"
+                  name="category"
+                  value={item.id}
+                  required
+                  checked={category === item.id}
+                  onChange={() => setCategory(item.id)}
+                  className="sr-only"
+                  aria-label={item.label}
+                />
+              </label>
+            );
+          })}
+        </fieldset>
+
+        <label htmlFor={messageId} className="sr-only">
+          お問い合わせ内容
+        </label>
+        <textarea
+          id={messageId}
+          name="message"
+          placeholder=" "
+          aria-label="お問い合わせ内容"
+          className="absolute left-[55.8%] top-[56.2%] h-[10.9%] w-[42.1%] resize-none rounded-md border border-transparent bg-transparent px-[1%] py-[0.5%] font-body text-[1vw] text-brand-black-deep outline-none placeholder:text-transparent focus:border-brand-black-deep/25 focus:bg-white/60 not-placeholder-shown:border-brand-black-deep/20 not-placeholder-shown:bg-white/95"
+        />
+
+        <button
+          type="submit"
+          aria-label="送信する"
+          className="absolute left-[55.8%] top-[68.4%] h-[4.1%] w-[42.1%] min-h-11"
+        />
+
+        {submitted ? (
+          <p
+            role="status"
+            className="absolute left-[55.8%] top-[73%] w-[42.1%] rounded-md bg-brand-ivory/95 px-[1%] py-[0.6%] font-body text-[0.8vw] text-brand-black-deep/80 shadow"
+          >
+            現在この送信ボタンは準備中です。送信先・送信方式が確定してから実際に送信できるようになります。
+          </p>
+        ) : null}
+      </form>
+
+      {/* Bottom bar — only the phone number is confirmed real data. */}
+      <a
+        href="tel:08061670414"
+        aria-label="電話でお問い合わせ 080-6167-0414"
+        className="absolute left-[8%] top-[81.5%] h-[8%] w-[18%] min-h-11"
+      />
+
+      {/* Footer nav row */}
+      <Link
+        href="/"
+        aria-label="Free Feel Toy ホームへ"
+        className="absolute left-[2.5%] top-[95.7%] h-[4%] w-[11%] min-h-11"
+      />
+      {footerNav.map((item) => (
+        <Link
+          key={item.href}
+          href={item.href}
+          aria-label={`${item.label} ページへ`}
+          className="absolute top-[95.7%] h-[4%] min-h-11"
+          style={{ left: `${item.left}%`, width: `${item.width}%` }}
+        />
+      ))}
+    </section>
+  );
+}
