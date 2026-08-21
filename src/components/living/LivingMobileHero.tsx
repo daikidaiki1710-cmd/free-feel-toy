@@ -22,19 +22,12 @@ const navItems = [
  * Logo and hamburger are the only nav pixels present in this image (no
  * ABOUT/CONTACT text row, same as GARAGE's mobile photo), so only those
  * two get hit areas — ABOUT/CONTACT stay reachable through the hamburger
- * dropdown. VIEW SERVICE smooth-scrolls to the mobile "暮らしのサポート
- * 詳細" section (#support, LivingMobileSupport) now that it exists.
+ * dropdown. VIEW SERVICE links to the "暮らしのサポート詳細" page
+ * (/living/support, LivingMobileSupport), now a separate page rather than
+ * an in-page anchor.
  */
 export function LivingMobileHero() {
   const [menuOpen, setMenuOpen] = useState(false);
-
-  const scrollToSupport = (event: React.MouseEvent<HTMLAnchorElement>) => {
-    event.preventDefault();
-    const target = document.getElementById("support");
-    if (!target) return;
-    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    target.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth", block: "start" });
-  };
 
   return (
     <section className="relative aspect-[863/1823] w-full">
@@ -82,10 +75,9 @@ export function LivingMobileHero() {
         </nav>
       )}
 
-      {/* VIEW SERVICE — smooth-scrolls to the LIVING mobile support detail section below. */}
-      <a
-        href="#support"
-        onClick={scrollToSupport}
+      {/* VIEW SERVICE — links to the LIVING mobile support detail page. */}
+      <Link
+        href="/living/support"
         aria-label="暮らしのサポート詳細へ"
         className="absolute left-[5.2%] top-[54%] h-[1.6%] w-[31.3%] min-h-11"
       />

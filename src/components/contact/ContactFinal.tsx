@@ -163,12 +163,50 @@ export function ContactFinal() {
         ) : null}
       </form>
 
-      {/* Bottom bar — only the phone number is confirmed real data. */}
+      {/* Bottom bar — phone, LINE, and email are confirmed real data. */}
       <a
         href="tel:08061670414"
         aria-label="電話でお問い合わせ 080-6167-0414"
         className="absolute left-[8%] top-[81.5%] h-[8%] w-[18%] min-h-11"
       />
+
+      {/* LINE — the baked heading/icon stay as-is. This whole block sits on
+          a solid backing panel sized to fully cover the baked "LINEでの
+          ご相談も受け付けております。/ お気軽にメッセージをお送りください。"
+          copy underneath (the source image never had ID/URL/QR baked in,
+          so those two lines would otherwise show through). ID is a plain
+          text overlay, the button is the one real link, and the QR is a
+          plain scannable image. */}
+      <div className="absolute left-[32%] top-[83.3%] flex w-[18%] flex-col items-start gap-1.5 rounded bg-brand-black-deep p-2">
+        <span className="font-body text-[0.85vw] text-brand-ivory">ID: @546hnsfs</span>
+        <div className="flex items-center gap-3">
+          <a
+            href="https://lin.ee/ZLB1YII"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex min-h-11 items-center justify-center rounded-full bg-[#7f9862] px-4 font-body text-[0.75vw] font-bold text-white transition-colors hover:bg-[#6f8654]"
+          >
+            LINEで相談する
+          </a>
+          <span className="h-[72px] w-[72px] shrink-0 overflow-hidden rounded bg-white p-1.5">
+            <span className="relative block h-full w-full">
+              <Image src="/contact/line-qr.png" alt="LINE公式アカウントQRコード" fill sizes="72px" className="object-contain" />
+            </span>
+          </span>
+        </div>
+      </div>
+
+      {/* Email — same treatment; the baked address is replaced by a real
+          overlay showing the confirmed address. */}
+      <a
+        href="mailto:freefeeltoy.freefeeltoy6677@gmail.com"
+        aria-label="メールで問い合わせる freefeeltoy.freefeeltoy6677@gmail.com"
+        className="absolute left-[51%] top-[81.3%] h-[8%] w-[24.5%]"
+      >
+        <span className="absolute left-[17%] top-[30%] w-[83%] rounded bg-brand-black-deep px-[3%] py-[3%] font-body text-[0.75vw] leading-snug text-brand-ivory">
+          freefeeltoy.freefeeltoy6677@gmail.com
+        </span>
+      </a>
 
       {/* Footer nav row */}
       <Link

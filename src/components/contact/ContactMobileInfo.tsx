@@ -1,9 +1,11 @@
+import Image from "next/image";
+
 /**
- * CONTACT mobile ④問い合わせ情報. Only the phone number is confirmed
- * (080-6167-0414) and gets a real tel: link — LINE / email / hours /
- * service area are the same unconfirmed display-only values already shown
- * on the approved PC image, carried over as plain text, not fabricated
- * further or wired as functional links.
+ * CONTACT mobile ④問い合わせ情報. Phone (080-6167-0414), LINE
+ * (@546hnsfs / https://lin.ee/ZLB1YII) and email
+ * (freefeeltoy.freefeeltoy6677@gmail.com) are confirmed and wired as real
+ * links. Hours / service area remain the same display-only values already
+ * shown on the approved PC image.
  */
 export function ContactMobileInfo() {
   return (
@@ -25,24 +27,42 @@ export function ContactMobileInfo() {
         <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#7f9862] text-[10px] font-bold text-brand-black-deep" aria-hidden="true">
           LINE
         </span>
-        <div>
-          <p className="font-body text-xs tracking-widest text-[#7f9862]">LINEでのお問い合わせ</p>
-          <p className="font-body text-sm text-brand-ivory">LINEでのご相談も受け付けております。</p>
-          <p className="mt-1 font-body text-xs text-brand-ivory-muted">LINE ID／URL 要確認</p>
+        <div className="flex flex-1 items-center gap-4">
+          <div className="flex flex-col items-start gap-2">
+            <div>
+              <p className="font-body text-xs tracking-widest text-[#7f9862]">LINEでのお問い合わせ</p>
+              <p className="font-body text-sm text-brand-ivory">ID: @546hnsfs</p>
+            </div>
+            <a
+              href="https://lin.ee/ZLB1YII"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex min-h-11 items-center justify-center rounded-full bg-[#7f9862] px-5 font-body text-sm font-bold text-white transition-colors hover:bg-[#6f8654]"
+            >
+              LINEで相談する
+            </a>
+          </div>
+          <Image
+            src="/contact/line-qr.png"
+            alt="LINE公式アカウントQRコード"
+            width={88}
+            height={88}
+            className="ml-auto shrink-0 rounded bg-white p-1.5"
+          />
         </div>
       </div>
 
-      <div className="flex items-start gap-3">
+      <a href="mailto:freefeeltoy.freefeeltoy6677@gmail.com" className="flex items-start gap-3 rounded-md transition-colors hover:bg-white/[0.04]">
         <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="mt-0.5 shrink-0 text-[#7f9862]">
           <rect x="3" y="5" width="18" height="14" rx="1.5" />
           <path d="m4 6.5 8 6.5 8-6.5" />
         </svg>
         <div>
           <p className="font-body text-xs tracking-widest text-[#7f9862]">メールでのお問い合わせ</p>
-          <p className="font-body text-sm text-brand-ivory">info@free-feel-toy.com</p>
+          <p className="font-body text-sm text-brand-ivory break-all">freefeeltoy.freefeeltoy6677@gmail.com</p>
           <p className="mt-1 font-body text-xs text-brand-ivory-muted">24時間受付中／返信は営業時間内に行います</p>
         </div>
-      </div>
+      </a>
 
       <div className="flex items-start gap-3">
         <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="mt-0.5 shrink-0 text-[#7f9862]">
