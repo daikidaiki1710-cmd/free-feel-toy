@@ -2,16 +2,17 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
+import { Logo } from "@/components/Logo";
 import { markIntroSeen, usePrefersReducedMotion, useIntroMode } from "@/lib/useIntroMode";
 import { playClick, playElectricHum, playMechanicalHum, resumeAudio, setMuted, startAmbient, stopAmbient } from "@/lib/introSound";
 
 type Phase = "gate" | "playing" | "darkening" | "exiting" | "done";
 
 /**
- * ms-from-timeline-start → stage number. No wordmark/tagline stage: the
- * photo already carries "Free Feel Toy." baked in, so the reveal itself is
- * the whole story. Stage 5 (full scene) is held with nothing added for
- * ~1s before ENTER THE BASE quietly appears (stage 6).
+ * ms-from-timeline-start → stage number. No wordmark/tagline stage during
+ * the base reveal itself: the photo already carries "Free Feel Toy." baked
+ * in. Stage 5 (full scene) is held with nothing added for ~1s before
+ * "CLICK TO ENTER" quietly appears (stage 6).
  */
 const FULL_TIMELINE: { at: number; stage: number }[] = [
   { at: 0, stage: 0 },
@@ -48,10 +49,12 @@ const SCRIM_BY_STAGE: Record<number, number> = {
 /**
  * PC HOME opening — "秘密基地全体を見渡す" experience. An independent
  * fixed overlay on top of the untouched HomeFinal(); never mounts inside
- * or modifies it. Darkness → staged spotlights → the base itself fully
- * revealed (its own baked-in "Free Feel Toy." reads as the brand — no
- * separate logo layer is drawn on top) → a brief hold on the base alone →
- * ENTER THE BASE appears as a small entrance sign, not a CTA button.
+ * or modifies it. A brand title card (Logo + tagline + SOUND ON / START)
+ * establishes this is Free Feel Toy before any darkness — that card is
+ * gone the instant START is pressed. Then: darkness → staged spotlights →
+ * the base itself fully revealed (its own baked-in "Free Feel Toy." reads
+ * as the brand — no logo layer is drawn over the base) → a brief hold →
+ * "CLICK TO ENTER" quietly labels the now fully-clickable base image.
  */
 export function HomeOpeningDesktop() {
   const mode = useIntroMode();
@@ -134,16 +137,15 @@ export function HomeOpeningDesktop() {
       >
         <Image src="/home/home-final.jpg" alt="" fill priority sizes="100vw" className="object-cover object-top" />
         <div className="absolute inset-0 bg-black/15" />
-        <div className="absolute inset-x-0 bottom-[4%] flex justify-center">
-          <button
-            type="button"
-            onClick={finish}
-            className="group flex min-h-11 items-center gap-2 px-3 font-body text-xs font-semibold tracking-[0.35em] text-brand-ivory-muted transition-colors hover:text-theme-accent"
-          >
-            ENTER THE BASE
-            <span aria-hidden="true" className="transition-transform duration-300 group-hover:translate-x-1">→</span>
-          </button>
+        <div aria-hidden="true" className="pointer-events-none absolute inset-x-0 bottom-[4%] flex justify-center">
+          <span className="font-body text-xs font-semibold tracking-[0.35em] text-brand-ivory-muted">CLICK TO ENTER</span>
         </div>
+        <button
+          type="button"
+          onClick={finish}
+          aria-label="クリックして秘密基地の中へ入る"
+          className="absolute inset-0 cursor-pointer"
+        />
       </div>
     );
   }
@@ -200,32 +202,44 @@ export function HomeOpeningDesktop() {
         style={{ background: "radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,0.5) 100%)" }}
       />
 
-      {/* ENTER THE BASE — a quiet entrance sign on the empty floor band at
-          the bottom of the frame, not a CTA button: no fill, no border, no
-          glow. Text + arrow only, matching the site's own CtaLink language. */}
+      {/* CLICK TO ENTER — a quiet label, not a button; the whole base image
+          becomes the click target below, so there's only ever one "ENTER"
+          on screen (no more competing with the photo's own per-room
+          ENTER → labels). */}
       <div
-        className={`absolute inset-x-0 bottom-[4%] flex justify-center transition-opacity duration-[1400ms] ease-out ${
+        aria-hidden="true"
+        className={`pointer-events-none absolute inset-x-0 bottom-[4%] flex justify-center transition-opacity duration-[1400ms] ease-out ${
           stage >= 6 && !isLeaving ? "opacity-100" : "opacity-0"
         }`}
       >
+        <span className="font-body text-xs font-semibold tracking-[0.35em] text-brand-ivory-muted">CLICK TO ENTER</span>
+      </div>
+
+      {/* Only clickable once the label above has appeared — an accidental
+          click during the lighting sequence must not skip ahead. */}
+      {stage >= 6 && !isLeaving && (
         <button
           type="button"
           onClick={finish}
-          disabled={stage < 6 || isLeaving}
-          className={`group flex min-h-11 items-center gap-2 px-3 font-body text-xs font-semibold tracking-[0.35em] text-brand-ivory-muted transition-all duration-500 ease-out hover:text-theme-accent ${
-            stage >= 6 ? "pointer-events-auto translate-y-0" : "pointer-events-none translate-y-1"
-          }`}
-        >
-          ENTER THE BASE
-          <span aria-hidden="true" className="transition-transform duration-300 group-hover:translate-x-1">
-            →
-          </span>
-        </button>
-      </div>
+          aria-label="クリックして秘密基地の中へ入る"
+          className="absolute inset-0 z-10 cursor-pointer"
+        />
+      )}
 
-      {/* Sound gate — first visit only, required to unlock Web Audio on Safari/iOS. */}
+      {/* Title card — first visit only. Establishes "this is Free Feel Toy"
+          before any darkness, so a first-time visitor never wonders if the
+          black screen is a stuck loader. Gone the instant START is
+          pressed; the base's own baked-in wordmark carries the brand from
+          here on, so this card never reappears once the opening starts. */}
       {showGate && (
-        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/70">
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-10 bg-black px-6 text-center">
+          <div className="flex flex-col items-center gap-6">
+            <div className="flex flex-col items-center gap-3">
+              <Logo className="text-6xl text-brand-ivory" />
+              <p className="font-body text-base tracking-[0.15em] text-brand-ivory-muted">自由な発想を、カタチに。</p>
+            </div>
+            <p className="font-body text-[11px] tracking-[0.4em] text-brand-brass">WELCOME TO OUR SECRET BASE</p>
+          </div>
           <button
             type="button"
             onClick={handleStart}
@@ -260,7 +274,7 @@ export function HomeOpeningDesktop() {
       <button
         type="button"
         onClick={finish}
-        className="absolute left-4 top-4 z-20 min-h-11 rounded px-3 font-body text-xs tracking-[0.2em] text-brand-ivory-muted/80 transition-colors hover:text-brand-ivory"
+        className="absolute left-4 top-4 z-20 flex min-h-11 items-center rounded px-3 font-body text-[10px] tracking-[0.15em] text-brand-ivory-muted/45 transition-colors hover:text-brand-ivory-muted"
       >
         SKIP INTRO
       </button>

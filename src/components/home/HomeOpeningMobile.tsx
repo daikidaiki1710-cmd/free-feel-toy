@@ -2,16 +2,17 @@
 
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
+import { Logo } from "@/components/Logo";
 import { markIntroSeen, usePrefersReducedMotion, useIntroMode } from "@/lib/useIntroMode";
 import { playClick, playElectricHum, playMechanicalHum, resumeAudio, setMuted, startAmbient, stopAmbient } from "@/lib/introSound";
 
 type Phase = "gate" | "playing" | "darkening" | "exiting" | "done";
 
 /**
- * ms-from-timeline-start → stage number. No wordmark/tagline stage: the
- * photo already carries "Free Feel Toy." baked in, so the reveal itself is
- * the whole story. Stage 5 (full scene) is held with nothing added for
- * ~1s before ENTER THE BASE quietly appears (stage 6).
+ * ms-from-timeline-start → stage number. No wordmark/tagline stage during
+ * the base reveal itself: the photo already carries "Free Feel Toy." baked
+ * in. Stage 5 (full scene) is held with nothing added for ~1s before
+ * "TAP TO ENTER" quietly appears (stage 6).
  */
 const FULL_TIMELINE: { at: number; stage: number }[] = [
   { at: 0, stage: 0 },
@@ -49,10 +50,13 @@ const SCRIM_BY_STAGE: Record<number, number> = {
  * Mobile HOME opening — "秘密基地へ自分が入り込む" experience. An
  * independent fixed overlay on top of the untouched HomeFinalMobile(); the
  * vertical light order and the zoom+drift camera move are mobile-specific,
- * not a scaled-down copy of the desktop version. The photo's own baked-in
- * "Free Feel Toy." reads as the brand once revealed — no separate logo
- * layer is drawn on top. ENTER THE BASE sits on the quiet wooden beam
- * between the GARAGE and LAB rooms — a small entrance sign, not a button.
+ * not a scaled-down copy of the desktop version. A brand title card (Logo
+ * + tagline + SOUND ON / START) opens the experience so a first-time
+ * visitor never mistakes the black screen for a stuck loader; that card is
+ * gone the instant START is pressed. From then on the photo's own
+ * baked-in "Free Feel Toy." carries the brand — no logo layer is drawn
+ * over the base. Once revealed, "TAP TO ENTER" quietly labels the base,
+ * which itself becomes the tap target — not a separate button.
  */
 export function HomeOpeningMobile() {
   const mode = useIntroMode();
@@ -133,16 +137,19 @@ export function HomeOpeningMobile() {
       >
         <Image src="/home/home-final-mobile.jpg" alt="" fill priority sizes="100vw" className="object-cover object-top" />
         <div className="absolute inset-0 bg-black/15" />
-        <div className="absolute inset-x-0 top-[48%] flex -translate-y-1/2 justify-center">
-          <button
-            type="button"
-            onClick={finish}
-            className="group flex min-h-11 items-center gap-2 px-3 font-body text-xs font-semibold tracking-[0.3em] text-brand-ivory-muted"
-          >
-            ENTER THE BASE
-            <span aria-hidden="true">→</span>
-          </button>
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 flex justify-center"
+          style={{ bottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}
+        >
+          <span className="font-body text-xs font-semibold tracking-[0.3em] text-brand-ivory-muted">TAP TO ENTER</span>
         </div>
+        <button
+          type="button"
+          onClick={finish}
+          aria-label="タップして秘密基地の中へ入る"
+          className="absolute inset-0 cursor-pointer"
+        />
       </div>
     );
   }
@@ -197,32 +204,46 @@ export function HomeOpeningMobile() {
         style={{ background: "radial-gradient(ellipse at center, transparent 40%, rgba(0,0,0,0.55) 100%)" }}
       />
 
-      {/* ENTER THE BASE — a quiet entrance sign on the wooden beam between
-          the GARAGE and LAB rooms, not a CTA button: no fill, no border,
-          no glow, and clear of the photo's own "Free Feel Toy." / MOVE /
-          CREATE / LIFE text. */}
+      {/* TAP TO ENTER — a quiet label at the bottom of the screen, not a
+          button; the whole base image becomes the tap target below, so
+          there's only ever one "ENTER" on screen (no more competing with
+          the photo's own per-room ENTER → labels, and nothing sits between
+          GARAGE and LAB to disturb that composition anymore). */}
       <div
-        className={`absolute inset-x-0 top-[48%] flex -translate-y-1/2 justify-center transition-opacity duration-[1300ms] ease-out ${
+        aria-hidden="true"
+        className={`pointer-events-none absolute inset-x-0 flex justify-center transition-opacity duration-[1300ms] ease-out ${
           stage >= 6 && !isLeaving ? "opacity-100" : "opacity-0"
         }`}
+        style={{ bottom: "calc(0.75rem + env(safe-area-inset-bottom))" }}
       >
+        <span className="font-body text-xs font-semibold tracking-[0.3em] text-brand-ivory-muted">TAP TO ENTER</span>
+      </div>
+
+      {/* Only tappable once the label above has appeared — an accidental
+          tap during the lighting sequence must not skip ahead. */}
+      {stage >= 6 && !isLeaving && (
         <button
           type="button"
           onClick={finish}
-          disabled={stage < 6 || isLeaving}
-          className={`group flex min-h-11 items-center gap-2 px-3 font-body text-xs font-semibold tracking-[0.3em] text-brand-ivory-muted transition-all duration-500 ease-out active:text-theme-accent ${
-            stage >= 6 ? "pointer-events-auto translate-y-0" : "pointer-events-none translate-y-1"
-          }`}
-        >
-          ENTER THE BASE
-          <span aria-hidden="true" className="transition-transform duration-300 group-active:translate-x-1">
-            →
-          </span>
-        </button>
-      </div>
+          aria-label="タップして秘密基地の中へ入る"
+          className="absolute inset-0 z-10 cursor-pointer"
+        />
+      )}
 
+      {/* Title card — first visit only. Establishes "this is Free Feel
+          Toy" before any darkness, so a first-time visitor never wonders
+          if the black screen is a stuck loader. Gone the instant START is
+          pressed; the base's own baked-in wordmark carries the brand from
+          here on, so this card never reappears once the opening starts. */}
       {showGate && (
-        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-black/70 px-6">
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-8 bg-black px-6 text-center">
+          <div className="flex flex-col items-center gap-5">
+            <div className="flex flex-col items-center gap-2.5">
+              <Logo className="text-4xl text-brand-ivory" />
+              <p className="font-body text-sm tracking-[0.1em] text-brand-ivory-muted">自由な発想を、カタチに。</p>
+            </div>
+            <p className="font-body text-[10px] tracking-[0.35em] text-brand-brass">WELCOME TO OUR SECRET BASE</p>
+          </div>
           <button
             type="button"
             onClick={handleStart}
@@ -256,7 +277,7 @@ export function HomeOpeningMobile() {
       <button
         type="button"
         onClick={finish}
-        className="absolute left-3 top-3 z-20 min-h-11 rounded px-2 font-body text-xs tracking-[0.15em] text-brand-ivory-muted/80"
+        className="absolute left-3 top-3 z-20 flex min-h-11 items-center rounded px-2 font-body text-[10px] tracking-[0.12em] text-brand-ivory-muted/45"
       >
         SKIP INTRO
       </button>
