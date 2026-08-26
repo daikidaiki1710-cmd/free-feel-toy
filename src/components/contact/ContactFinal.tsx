@@ -25,27 +25,57 @@ const footerNav = [
  * Final approved CONTACT visual — a single unmodified photo/mock
  * (docs/design-tokens.md), same pattern as GARAGE/LAB/LIVING. The image is
  * the design, form included; only real navigation + a working form are
- * layered on top. Desktop (1536x1024 source) only for now — no mobile crop
- * has been approved yet.
+ * layered on top. Desktop (1536x1024) only — see ContactMobileHero for the
+ * mobile counterpart.
  */
+type SubmitStatus = "idle" | "submitting" | "success" | "error";
+
 export function ContactFinal() {
   const [category, setCategory] = useState<CategoryId | null>(null);
-  const [submitted, setSubmitted] = useState(false);
+  const [status, setStatus] = useState<SubmitStatus>("idle");
   const nameId = useId();
   const emailId = useId();
   const phoneId = useId();
   const messageId = useId();
+  const companyId = useId();
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setSubmitted(true);
+    if (status === "submitting") return;
+
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    setStatus("submitting");
+
+    try {
+      const response = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: formData.get("name"),
+          email: formData.get("email"),
+          phone: formData.get("phone"),
+          category: formData.get("category"),
+          message: formData.get("message"),
+          company: formData.get("company"),
+        }),
+      });
+
+      if (!response.ok) throw new Error("send_failed");
+
+      form.reset();
+      setCategory(null);
+      setStatus("success");
+    } catch {
+      setStatus("error");
+    }
   };
 
   return (
     <section className="relative aspect-[1536/1024] w-full bg-black">
       <Image
         src="/contact/contact-final.jpg"
-        alt="Free Feel Toy CONTACT — 木の作業台と道具に囲まれた秘密基地のようなワークショップ。お問い合わせフォーム。"
+        alt="Free Feel Toy CONTACT — 夕暮れの秘密基地。外から見たガレージの入口、暖かい光が漏れる「FREE FEEL TOY.」の看板。お問い合わせフォーム。"
         fill
         priority
         sizes="100vw"
@@ -71,6 +101,14 @@ export function ContactFinal() {
 
       {/* Contact form — real inputs positioned over the approved form panel. */}
       <form onSubmit={handleSubmit} className="contents">
+        {/* Honeypot — invisible to real users (off-screen, unfocusable,
+            unannounced), so it stays unfilled by humans and filled by bots.
+            Not sr-only: a honeypot must be hidden from screen readers too. */}
+        <div className="pointer-events-none absolute -left-[9999px] top-0 h-0 w-0 overflow-hidden">
+          <label htmlFor={companyId}>会社名</label>
+          <input id={companyId} name="company" type="text" tabIndex={-1} autoComplete="off" />
+        </div>
+
         <label htmlFor={nameId} className="sr-only">
           お名前
         </label>
@@ -149,16 +187,32 @@ export function ContactFinal() {
 
         <button
           type="submit"
-          aria-label="送信する"
-          className="absolute left-[55.8%] top-[68.4%] h-[4.1%] w-[42.1%] min-h-11"
+          disabled={status === "submitting"}
+          aria-label={status === "submitting" ? "送信中" : "送信する"}
+          className="absolute left-[55.8%] top-[68.4%] h-[4.1%] w-[42.1%] min-h-11 disabled:cursor-wait"
         />
+        {status === "submitting" ? (
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute left-[55.8%] top-[68.4%] flex h-[4.1%] w-[42.1%] items-center justify-center rounded-md bg-brand-black-deep/85 font-body text-[0.9vw] font-bold text-brand-ivory"
+          >
+            送信中...
+          </span>
+        ) : null}
 
-        {submitted ? (
+        {status === "success" ? (
           <p
             role="status"
             className="absolute left-[55.8%] top-[73%] w-[42.1%] rounded-md bg-brand-ivory/95 px-[1%] py-[0.6%] font-body text-[0.8vw] text-brand-black-deep/80 shadow"
           >
-            現在この送信ボタンは準備中です。送信先・送信方式が確定してから実際に送信できるようになります。
+            お問い合わせありがとうございます。内容を確認後、ご連絡いたします。
+          </p>
+        ) : status === "error" ? (
+          <p
+            role="status"
+            className="absolute left-[55.8%] top-[73%] w-[42.1%] rounded-md bg-brand-ivory/95 px-[1%] py-[0.6%] font-body text-[0.8vw] text-red-700 shadow"
+          >
+            送信に失敗しました。お手数ですがLINEまたはお電話でお問い合わせください。
           </p>
         ) : null}
       </form>

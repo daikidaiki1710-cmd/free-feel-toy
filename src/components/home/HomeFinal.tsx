@@ -33,13 +33,38 @@ export function HomeFinal() {
         className="object-cover object-top"
       />
 
-      {/* Header nav hit areas — SERVICE / WORKS / PROJECTS have no page yet
-          in the confirmed sitemap (docs/project-card.md) and are left inert. */}
+      {/* Header nav. ABOUT/CONTACT stay as pure hit areas over the baked
+          labels (unchanged). SERVICE/WORKS/PROJECTS are covered with a
+          same-color patch (the header background is solid near-black) and
+          relabeled with real text reading GARAGE/LAB/LIVING, matching the
+          site's official structure — no new image has been approved yet,
+          so the source pixels themselves are untouched. */}
       <Link
         href="/about"
         aria-label="ABOUT ページへ"
         className="absolute left-[60.2%] top-[2.9%] h-[3.1%] w-[4.6%]"
       />
+      <Link
+        href="/garage"
+        aria-label="GARAGE ページへ"
+        className="absolute left-[65%] top-[2.2%] flex h-[4.4%] w-[8%] items-center justify-center bg-black"
+      >
+        <span className="font-body text-[0.82vw] font-bold tracking-[0.15em] text-white">GARAGE</span>
+      </Link>
+      <Link
+        href="/lab"
+        aria-label="LAB ページへ"
+        className="absolute left-[73.2%] top-[2.2%] flex h-[4.4%] w-[5.8%] items-center justify-center bg-black"
+      >
+        <span className="font-body text-[0.82vw] font-bold tracking-[0.15em] text-white">LAB</span>
+      </Link>
+      <Link
+        href="/living"
+        aria-label="LIVING ページへ"
+        className="absolute left-[79.2%] top-[2.2%] flex h-[4.4%] w-[8.3%] items-center justify-center bg-black"
+      >
+        <span className="font-body text-[0.82vw] font-bold tracking-[0.15em] text-white">LIVING</span>
+      </Link>
       <Link
         href="/contact"
         aria-label="CONTACT ページへ"

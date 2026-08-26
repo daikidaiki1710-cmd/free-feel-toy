@@ -32,13 +32,50 @@ export function HomeFinalMobile() {
         className="object-cover object-top"
       />
 
-      {/* Header nav hit areas — SERVICE / WORKS / PROJECTS have no page yet
-          in the confirmed sitemap (docs/project-card.md) and are left inert. */}
+      {/* Header nav. ABOUT/CONTACT stay as pure hit areas over the baked
+          labels (unchanged). SERVICE/WORKS/PROJECTS are covered with a
+          same-color patch (the header background is solid near-black) and
+          relabeled with real text reading GARAGE/LAB/LIVING, matching the
+          site's official structure — no new image has been approved yet,
+          so the source pixels themselves are untouched. */}
       <Link
         href="/about"
         aria-label="ABOUT ページへ"
         className="absolute left-[46.4%] top-[1.7%] h-[1%] min-h-11 w-[6.5%] min-w-11"
       />
+      <Link
+        href="/garage"
+        aria-label="GARAGE ページへ"
+        className="absolute left-[55%] top-[1.2%] h-[2.5%] min-h-11 w-[9%] min-w-11"
+      />
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute left-[55%] top-[1.75%] flex h-[1.1%] w-[9.6%] items-center justify-center bg-black font-body text-[1.35vw] font-bold tracking-[0.1em] text-white"
+      >
+        GARAGE
+      </span>
+      <Link
+        href="/lab"
+        aria-label="LAB ページへ"
+        className="absolute left-[64.5%] top-[1.2%] h-[2.5%] min-h-11 w-[7.8%] min-w-11"
+      />
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute left-[64.5%] top-[1.75%] flex h-[1.1%] w-[8.1%] items-center justify-center bg-black font-body text-[1.35vw] font-bold tracking-[0.1em] text-white"
+      >
+        LAB
+      </span>
+      <Link
+        href="/living"
+        aria-label="LIVING ページへ"
+        className="absolute left-[72.5%] top-[1.2%] h-[2.5%] min-h-11 w-[9.5%] min-w-11"
+      />
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute left-[72.5%] top-[1.75%] flex h-[1.1%] w-[9.5%] items-center justify-center bg-black font-body text-[1.35vw] font-bold tracking-[0.1em] text-white"
+      >
+        LIVING
+      </span>
       <Link
         href="/contact"
         aria-label="CONTACT ページへ"

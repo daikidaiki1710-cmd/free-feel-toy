@@ -78,22 +78,60 @@ const categories: Category[] = [
  * form as the PC version (no send destination confirmed yet), laid out as
  * one column with a 2x2 category grid per the approved mobile brief.
  */
+type SubmitStatus = "idle" | "submitting" | "success" | "error";
+
 export function ContactMobileForm() {
   const [category, setCategory] = useState<CategoryId | null>(null);
-  const [submitted, setSubmitted] = useState(false);
+  const [status, setStatus] = useState<SubmitStatus>("idle");
   const nameId = useId();
   const emailId = useId();
   const phoneId = useId();
   const messageId = useId();
+  const companyId = useId();
 
-  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    setSubmitted(true);
+    if (status === "submitting") return;
+
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    setStatus("submitting");
+
+    try {
+      const response = await fetch("/api/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: formData.get("name"),
+          email: formData.get("email"),
+          phone: formData.get("phone"),
+          category: formData.get("category"),
+          message: formData.get("message"),
+          company: formData.get("company"),
+        }),
+      });
+
+      if (!response.ok) throw new Error("send_failed");
+
+      form.reset();
+      setCategory(null);
+      setStatus("success");
+    } catch {
+      setStatus("error");
+    }
   };
 
   return (
     <section className="bg-brand-ivory px-6 py-10">
       <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+        {/* Honeypot — invisible to real users (off-screen, unfocusable,
+            unannounced), so it stays unfilled by humans and filled by bots.
+            Not sr-only: a honeypot must be hidden from screen readers too. */}
+        <div className="pointer-events-none absolute -left-[9999px] top-0 h-0 w-0 overflow-hidden">
+          <label htmlFor={companyId}>会社名</label>
+          <input id={companyId} name="company" type="text" tabIndex={-1} autoComplete="off" />
+        </div>
+
         <div className="flex items-center gap-3 border-b border-brand-black-deep/15 pb-4">
           <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true" className="text-brand-black-deep">
             <rect x="5" y="3" width="14" height="18" rx="1.5" />
@@ -192,18 +230,29 @@ export function ContactMobileForm() {
 
         <button
           type="submit"
-          className="flex min-h-11 items-center justify-center gap-2 rounded-md bg-[#7f9862] px-6 py-4 font-heading text-base tracking-wide text-white transition-colors hover:bg-[#6f8654]"
+          disabled={status === "submitting"}
+          className="flex min-h-11 items-center justify-center gap-2 rounded-md bg-[#7f9862] px-6 py-4 font-heading text-base tracking-wide text-white transition-colors hover:bg-[#6f8654] disabled:cursor-wait disabled:opacity-70"
         >
-          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
-            <path d="M22 2 11 13" />
-            <path d="M22 2 15 22l-4-9-9-4 20-7Z" />
-          </svg>
-          送信する
+          {status === "submitting" ? (
+            "送信中..."
+          ) : (
+            <>
+              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true">
+                <path d="M22 2 11 13" />
+                <path d="M22 2 15 22l-4-9-9-4 20-7Z" />
+              </svg>
+              送信する
+            </>
+          )}
         </button>
 
-        {submitted ? (
+        {status === "success" ? (
           <p role="status" className="font-body text-sm text-brand-black-deep/70">
-            現在この送信ボタンは準備中です。送信先・送信方式が確定してから実際に送信できるようになります。
+            お問い合わせありがとうございます。内容を確認後、ご連絡いたします。
+          </p>
+        ) : status === "error" ? (
+          <p role="status" className="font-body text-sm text-red-700">
+            送信に失敗しました。お手数ですがLINEまたはお電話でお問い合わせください。
           </p>
         ) : (
           <p className="font-body text-xs text-brand-black-deep/50">※通常、24時間以内にご返信いたします。</p>

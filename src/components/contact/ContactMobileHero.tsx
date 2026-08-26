@@ -18,8 +18,8 @@ const navItems = [
  * heading/copy baked into its pixels, so there is no clean mobile crop that
  * carries that text without also carrying the PC-only header row and being
  * cropped in a way that abandons the portrait phone-shape brief. This uses
- * a text-free crop of the same approved photo — the hanging lamps and
- * "FREE FEEL TOY." shelf signage just below the PC header row — as an
+ * a text-free crop of the same approved photo — the dusk exterior of the
+ * secret base, "FREE FEEL TOY." signage lit from within — as an
  * establishing first-view shot, then real HTML for the CONTACT heading and
  * copy below it — same words as the PC image, same black/ivory/green world.
  */
@@ -28,18 +28,18 @@ export function ContactMobileHero() {
 
   return (
     <section className="relative bg-brand-black-deep">
-      <div className="relative aspect-[4/3] w-full">
+      <div className="relative aspect-[3/1] w-full">
         <Image
           src="/contact/contact-mobile-hero.jpg"
-          alt="Free Feel Toy CONTACT — 秘密基地のようなワークショップ。ぶら下がる電球と「FREE FEEL TOY. GARAGE LAB LIVING」の看板、道具棚。"
+          alt="Free Feel Toy CONTACT — 夕暮れの秘密基地。外から見たガレージの入口、暖かい光が漏れる「FREE FEEL TOY.」の看板。"
           fill
           priority
           sizes="100vw"
-          className="object-cover object-center"
+          className="object-cover object-[20%_50%]"
         />
         <div
           aria-hidden="true"
-          className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-brand-black-deep/85 to-transparent"
+          className="absolute inset-x-0 top-0 h-12 bg-gradient-to-b from-brand-black-deep/85 to-transparent"
         />
 
         <Link

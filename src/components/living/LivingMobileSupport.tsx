@@ -16,16 +16,18 @@ const navItems = [
  * Final approved LIVING mobile "暮らしのサポート詳細" visual #2 — a single
  * unmodified photo (docs/design-tokens.md), used as its own page at
  * /living/support. The container height is cropped to just above the
- * image's own baked-in phone/LINE CTA band (which duplicates the one CTA
- * kept on /living) — a display-only crop via a shorter aspect ratio and
- * object-cover object-top, not a re-export of the source file, so the
- * approved image bytes are untouched. Percentages below are relative to
- * this cropped container, not the full 853x1844 source.
+ * image's own baked-in phone/LINE CTA band — a display-only crop via a
+ * shorter aspect ratio and object-cover object-top, not a re-export of the
+ * source file, so the approved image bytes are untouched. Percentages
+ * below are relative to this cropped container, not the full 853x1844
+ * source. A single real contact CTA (LINE + tel:) follows below the image
+ * as its own section — the only phone/LINE CTA left in LIVING.
  */
 export function LivingMobileSupport() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
+    <>
     <section className="relative aspect-[853/1665] w-full">
       <Image
         src="/living/living-mobile-2.jpg"
@@ -84,5 +86,29 @@ export function LivingMobileSupport() {
         className="absolute left-[66.2%] top-[18.3%] h-[10.5%] w-[19.9%] rounded-full transition-shadow duration-300 active:shadow-[inset_0_0_0_3px_rgba(255,255,255,0.35)]"
       />
     </section>
+
+    {/* The one LIVING contact CTA — kept to this single spot at the end of
+        /living/support so the phone number doesn't repeat across the
+        section. */}
+    <section className="flex flex-col items-center gap-6 bg-brand-black-deep px-6 py-14 text-center">
+      <h2 className="font-heading text-2xl text-brand-ivory">まずは、話してみませんか。</h2>
+      <div className="flex w-full max-w-xs flex-col gap-4">
+        <a
+          href="https://lin.ee/ZLB1YII"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex min-h-11 items-center justify-center rounded-full bg-[#7f9862] px-6 py-3 font-body text-base font-bold text-white transition-colors hover:bg-[#6f8654]"
+        >
+          LINEで相談する
+        </a>
+        <a
+          href="tel:08061670414"
+          className="flex min-h-11 items-center justify-center rounded-full border-2 border-[#7f9862] px-6 py-3 font-body text-base font-bold text-[#7f9862] transition-colors hover:bg-[#7f9862]/10"
+        >
+          電話で相談する
+        </a>
+      </div>
+    </section>
+    </>
   );
 }
