@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { markIntroSeen, usePrefersReducedMotion, useIntroMode } from "@/lib/useIntroMode";
 import {
   playClick,
@@ -15,61 +15,60 @@ import {
   stopAmbient,
 } from "@/lib/introSound";
 import {
-  FLASH_KEYFRAMES,
-  LEAVE_AT,
-  LIGHTING_DURATION,
-  LIGHTING_SCRIM_BY_COUNT,
-  LIGHTING_START,
-  SCENE_COUNT,
-  SCENE_DELAY,
-  SCENE_FULL_AT,
-  buildSceneKeyframes,
-  flashAnimationStyle,
-  sceneAnimationStyle,
+  B_END,
+  C_END,
+  D_END,
+  D_FADE_START,
+  E_DISSOLVE_START,
+  SCALE_RANGE,
+  TOTAL_DURATION,
+  easeInOutCubic,
+  smoothstep,
 } from "./openingTimeline";
 
-type Phase = "gate" | "sequence" | "leaving" | "done";
+type Phase = "gate" | "sequence" | "done";
 
-const SCENE_KEYFRAMES = buildSceneKeyframes();
-const SCENE_NUMBERS = Array.from({ length: SCENE_COUNT }, (_, i) => i + 1);
-
-/** Approximate lamp positions in scene-09.jpg (the already-lit base) for the three "カチッ" bloom accents. */
-const LIGHTING_BLOOMS = [
-  { left: 50, top: 25, size: 34 },
-  { left: 15, top: 47, size: 30 },
-  { left: 85, top: 47, size: 30 },
-];
-
-/** Tap hotspot over the light in scene-01.jpg — percentage coordinates, same convention as every other page's image+hotspot pattern. */
+/** Tap hotspot over the light in scene-02.jpg — percentage coordinates, same convention as every other page's image+hotspot pattern. */
 const GATE_HOTSPOT = { left: 50, top: 66, width: 26, height: 30 };
+
+const IDLE_KEYFRAMES = `
+@keyframes ffl-idle-creep { 0% { transform: scale(1); } 100% { transform: scale(1.035); } }
+@keyframes ffl-idle-breathe { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.07); } }
+@keyframes ffl-hint-ripple { 0%, 82% { opacity: 0; transform: scale(1); } 88% { opacity: 0.4; } 100% { opacity: 0; transform: scale(9); } }
+`;
 
 type OpeningSequenceProps = {
   exitDurationMs: number;
 };
 
 /**
- * SCENE 01–10 opening built entirely from the 10 approved master images
- * (public/home/opening/scene-01..09.jpg). SCENE 10 itself needs no asset
- * here — it's the always-mounted HomeFinal/HomeFinalMobile already sitting
- * beneath this overlay in page.tsx; dissolving this overlay's opacity to 0
- * *is* the arrival.
- *
- * Each scene layer runs its own crossfade (opacity) AND its own continuous
- * scale animation across its *entire* visible lifetime — not just at the
- * crossfade edges — so it reads as one camera pushing through each image's
- * own space rather than a slideshow of static frames. SCENE 06 carries the
- * only full-frame flash in the whole sequence; every other handoff is pure
- * crossfade + scale, never a brightness pop.
+ * HOME opening built from 4 approved master images — scene-02 (待機/起動),
+ * scene-03 (リング), scene-08 (トンネル奥の秘密基地), scene-09 (基地へ接近) —
+ * plus the real HOME underneath. Unlike a crossfade slideshow, every layer
+ * shares ONE continuous camera-scale timeline (computed once per frame and
+ * applied identically to whichever layers are mounted) so scale never
+ * resets at an image handoff — only opacity (and, for the SCENE C "burst
+ * through the ring" beat, a growing mask hole + brief blur) changes at
+ * each handoff. Driven by a single requestAnimationFrame loop that writes
+ * directly to each layer's DOM style, not React state, so it can update at
+ * full frame rate without re-render overhead — and JSX never sets these
+ * layers' opacity/transform itself, so a re-render from something unrelated
+ * (e.g. the mute button) can't stomp on the in-flight animation.
  */
 export function OpeningSequence({ exitDurationMs }: OpeningSequenceProps) {
   const mode = useIntroMode();
   const reducedMotion = usePrefersReducedMotion();
 
   const [phase, setPhase] = useState<Phase>("gate");
-  const [playing, setPlaying] = useState(false);
-  const [litCount, setLitCount] = useState(0);
-  const [nineArrived, setNineArrived] = useState(false);
+  const [gateIdle, setGateIdle] = useState(true);
   const [muted, setMutedState] = useState(false);
+
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const l1Ref = useRef<HTMLDivElement>(null);
+  const l2Ref = useRef<HTMLDivElement>(null);
+  const l3Ref = useRef<HTMLDivElement>(null);
+  const l4Ref = useRef<HTMLDivElement>(null);
+  const rafId = useRef<number | null>(null);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   const clearTimers = () => {
@@ -77,42 +76,181 @@ export function OpeningSequence({ exitDurationMs }: OpeningSequenceProps) {
     timers.current = [];
   };
 
-  function leave() {
+  const cancelRaf = () => {
+    if (rafId.current != null) cancelAnimationFrame(rafId.current);
+    rafId.current = null;
+  };
+
+  useEffect(() => {
+    return () => {
+      clearTimers();
+      cancelRaf();
+    };
+  }, []);
+
+  // Initial layer visibility — set once, imperatively, so later re-renders
+  // (mute toggle etc.) never touch these elements' style and can't stomp
+  // on the rAF loop's in-flight values.
+  useEffect(() => {
+    if (l1Ref.current) l1Ref.current.style.opacity = "1";
+    [l2Ref, l3Ref, l4Ref].forEach((r) => {
+      if (r.current) r.current.style.opacity = "0";
+    });
+  }, []);
+
+  function finishSequence() {
     markIntroSeen();
-    clearTimers();
     stopAmbient();
-    setPhase("leaving");
-    timers.current.push(setTimeout(() => setPhase("done"), exitDurationMs));
+    cancelRaf();
+    setPhase("done");
   }
 
-  function skipIntro() {
-    markIntroSeen();
-    clearTimers();
-    stopAmbient();
-    setPhase("leaving");
-    timers.current.push(setTimeout(() => setPhase("done"), exitDurationMs));
+  function runSequence() {
+    const start = performance.now();
+    function frame(now: number) {
+      const t = now - start;
+      const p = Math.min(1, t / TOTAL_DURATION);
+      const scale = 1 + easeInOutCubic(p) * SCALE_RANGE;
+      const scaleStr = `scale(${scale})`;
+
+      const l1 = l1Ref.current;
+      const l2 = l2Ref.current;
+      const l3 = l3Ref.current;
+      const l4 = l4Ref.current;
+
+      if (t <= B_END) {
+        // SCENE B — light expands, ring spreads: a plain crossfade would
+        // read as a swap; sharing the same continuously-growing scale
+        // across both layers is what keeps it reading as one camera being
+        // pulled toward the center instead.
+        const u = smoothstep(t / B_END);
+        if (l1) {
+          l1.style.opacity = String(1 - u);
+          l1.style.transform = scaleStr;
+        }
+        if (l2) {
+          l2.style.opacity = String(u);
+          l2.style.transform = scaleStr;
+          l2.style.filter = "none";
+          l2.style.maskImage = "none";
+          (l2.style as CSSStyleDeclaration & { webkitMaskImage: string }).webkitMaskImage = "none";
+        }
+        if (l3) l3.style.opacity = "0";
+        if (l4) l4.style.opacity = "0";
+      } else if (t <= C_END) {
+        // SCENE C — burst through the ring's own center: a growing mask
+        // hole reveals SCENE 08 underneath *through* the ring image itself
+        // (not a cut to a new picture), with the ring fading away only
+        // after the hole has mostly opened, plus a brief blur right at the
+        // burst instant.
+        const u = (t - B_END) / (C_END - B_END);
+        if (l1) l1.style.opacity = "0";
+        const holeRadius = Math.pow(u, 1.6) * 145;
+        const l2Opacity = 1 - smoothstep((u - 0.55) / 0.45);
+        const l2Blur = Math.sin(Math.min(1, u / 0.75) * Math.PI) * 4;
+        const maskStr = `radial-gradient(circle at 50% 50%, transparent 0%, transparent ${holeRadius.toFixed(1)}%, black ${(holeRadius + 8).toFixed(1)}%, black 100%)`;
+        if (l2) {
+          l2.style.opacity = String(l2Opacity);
+          l2.style.transform = scaleStr;
+          l2.style.filter = l2Blur > 0.05 ? `blur(${l2Blur.toFixed(2)}px)` : "none";
+          l2.style.maskImage = maskStr;
+          (l2.style as CSSStyleDeclaration & { webkitMaskImage: string }).webkitMaskImage = maskStr;
+        }
+        const l3Opacity = smoothstep((u - 0.35) / 0.65);
+        if (l3) {
+          l3.style.opacity = String(l3Opacity);
+          l3.style.transform = scaleStr;
+        }
+        if (l4) l4.style.opacity = "0";
+      } else if (t <= D_END) {
+        // SCENE D — the critical beat: SCENE 08 alone, uninterrupted,
+        // continuing the same scale curve for over a second before SCENE 09
+        // even begins blending in, so nothing reads as "image N of M".
+        if (l1) l1.style.opacity = "0";
+        if (l2) {
+          l2.style.opacity = "0";
+          l2.style.filter = "none";
+          l2.style.maskImage = "none";
+          (l2.style as CSSStyleDeclaration & { webkitMaskImage: string }).webkitMaskImage = "none";
+        }
+        if (t <= D_FADE_START) {
+          if (l3) {
+            l3.style.opacity = "1";
+            l3.style.transform = scaleStr;
+          }
+          if (l4) l4.style.opacity = "0";
+        } else {
+          const u = smoothstep((t - D_FADE_START) / (D_END - D_FADE_START));
+          if (l3) {
+            l3.style.opacity = String(1 - u);
+            l3.style.transform = scaleStr;
+          }
+          if (l4) {
+            l4.style.opacity = String(u);
+            l4.style.transform = scaleStr;
+          }
+        }
+      } else {
+        // SCENE E — SCENE 09 alone, still scaling, while the whole overlay
+        // gradually dissolves into the real HOME beneath: the base itself
+        // becoming the site, never a hard cut to a new screen.
+        if (l3) l3.style.opacity = "0";
+        if (l4) {
+          l4.style.opacity = "1";
+          l4.style.transform = scaleStr;
+        }
+        if (t >= E_DISSOLVE_START && wrapperRef.current) {
+          const u = smoothstep((t - E_DISSOLVE_START) / (TOTAL_DURATION - E_DISSOLVE_START));
+          wrapperRef.current.style.opacity = String(1 - u);
+        }
+      }
+
+      if (t < TOTAL_DURATION) {
+        rafId.current = requestAnimationFrame(frame);
+      } else {
+        finishSequence();
+      }
+    }
+    rafId.current = requestAnimationFrame(frame);
   }
 
-  useEffect(() => clearTimers, []);
-
-  // Repeat visits within the same session: skip the full cinematic chain and
-  // arrive quickly on the already-lit base (SCENE 09 image), silently.
+  // Repeat visits within the same session: skip the full chain and arrive
+  // quickly on the already-lit base (scene-09), silently.
   useEffect(() => {
     if (mode !== "short" || phase !== "gate" || reducedMotion) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect -- imperative kickoff of a timer sequence on mount, not derived state
     setPhase("sequence");
-    setPlaying(true);
-    timers.current.push(setTimeout(() => leave(), 700));
+    setGateIdle(false);
+    if (l1Ref.current) {
+      l1Ref.current.style.animation = "none";
+      l1Ref.current.style.opacity = "0";
+    }
+    if (l4Ref.current) {
+      l4Ref.current.style.transition = "opacity 450ms ease-out, transform 450ms ease-out";
+      l4Ref.current.style.opacity = "1";
+      l4Ref.current.style.transform = "scale(1.02)";
+    }
+    timers.current.push(
+      setTimeout(() => {
+        markIntroSeen();
+        if (wrapperRef.current) {
+          wrapperRef.current.style.transition = "opacity 500ms ease-out";
+          wrapperRef.current.style.opacity = "0";
+        }
+        timers.current.push(setTimeout(() => setPhase("done"), 500));
+      }, 550)
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, reducedMotion]);
 
-  // Reduced motion: no crosszoom chain at all — a brief static hold on the
+  // Reduced motion: no camera movement at all — a brief static hold on the
   // already-lit base, then a short fade straight to real HOME.
+  const [reducedFading, setReducedFading] = useState(false);
   useEffect(() => {
     if (!reducedMotion) return;
     const t1 = setTimeout(() => {
       markIntroSeen();
-      setPhase("leaving");
+      setReducedFading(true);
     }, 500);
     const t2 = setTimeout(() => setPhase("done"), 500 + exitDurationMs);
     return () => {
@@ -121,42 +259,35 @@ export function OpeningSequence({ exitDurationMs }: OpeningSequenceProps) {
     };
   }, [reducedMotion, exitDurationMs]);
 
-  // SCENE 01: tapping the light is the only gesture in the whole
-  // experience. It unlocks audio and launches the SCENE 02–09 sequence —
-  // the images themselves carry the ripple/ring/tunnel/base, this only
-  // times, moves (scale) and sound-syncs the handoff between them.
+  // SCENE A → B: tapping the light is the only gesture in the whole
+  // experience. It unlocks audio and launches the single continuous
+  // camera-timeline that carries the rest of the sequence.
   async function handleIgnite() {
     const ok = await resumeAudio();
     if (ok) startAmbient();
     playClick();
+    setGateIdle(false);
+    if (l1Ref.current) l1Ref.current.style.animation = "none"; // stop the idle CSS animation before rAF takes over transform/opacity
     setPhase("sequence");
-    setPlaying(true);
 
-    // SCENE 02 — small click already played; the low "ブゥ…" as the ripple spreads.
     timers.current.push(setTimeout(() => playElectricHum(500), 80));
-    // SCENE 03 — "ブゥゥン…" as the ring activates.
-    timers.current.push(setTimeout(() => playMechanicalHum(700), SCENE_FULL_AT[3]));
-    // SCENE 04→05 — one continuous rising sweep through the acceleration and the suction.
-    timers.current.push(
-      setTimeout(() => playWarpRise(SCENE_FULL_AT[6] - SCENE_FULL_AT[4]), SCENE_FULL_AT[4])
-    );
-    // SCENE 06 — "シュン" right as the light is broken through.
-    timers.current.push(setTimeout(() => playWhoosh(300), Math.max(0, SCENE_FULL_AT[6] - 150)));
+    timers.current.push(setTimeout(() => playMechanicalHum(700), 500));
+    timers.current.push(setTimeout(() => playWhoosh(300), B_END + 380));
+    timers.current.push(setTimeout(() => playWarpRise(D_END - C_END - 100), C_END));
 
-    // SCENE 09 arrives dim (scrim up); three staged lamp clicks then lift it
-    // in steps, "暗め→カチッ→一部点灯→カチッ→さらに→カチッ→完全点灯".
-    timers.current.push(setTimeout(() => setNineArrived(true), SCENE_DELAY[SCENE_COUNT]));
-    [0, LIGHTING_DURATION * 0.4, LIGHTING_DURATION * 0.8].forEach((offset, i) => {
-      timers.current.push(
-        setTimeout(() => {
-          playClick();
-          setLitCount(i + 1);
-        }, LIGHTING_START + offset)
-      );
-    });
+    runSequence();
+  }
 
-    // SCENE 10 — hold in silence on the fully-lit base, then dissolve into real HOME.
-    timers.current.push(setTimeout(() => leave(), LEAVE_AT));
+  function skipIntro() {
+    markIntroSeen();
+    clearTimers();
+    cancelRaf();
+    stopAmbient();
+    if (wrapperRef.current) {
+      wrapperRef.current.style.transition = "opacity 500ms ease-out";
+      wrapperRef.current.style.opacity = "0";
+    }
+    timers.current.push(setTimeout(() => setPhase("done"), 500));
   }
 
   function toggleMute() {
@@ -166,16 +297,14 @@ export function OpeningSequence({ exitDurationMs }: OpeningSequenceProps) {
     });
   }
 
-  const sceneStyles = useMemo(() => SCENE_NUMBERS.map((scene) => sceneAnimationStyle(scene, playing)), [playing]);
-
   if (phase === "done") return null;
 
-  // Reduced motion: the already-lit base, static, no crossfade chain.
+  // Reduced motion: the already-lit base, static, no camera movement.
   if (reducedMotion) {
     return (
       <div
         className={`fixed inset-0 z-50 bg-brand-black-deep transition-opacity ease-out ${
-          phase === "leaving" ? "pointer-events-none opacity-0" : "opacity-100"
+          reducedFading ? "pointer-events-none opacity-0" : "opacity-100"
         }`}
         style={{ transitionDuration: `${exitDurationMs}ms` }}
       >
@@ -186,100 +315,31 @@ export function OpeningSequence({ exitDurationMs }: OpeningSequenceProps) {
   }
 
   const showGate = phase === "gate" && mode === "full";
-  const isLeaving = phase === "leaving";
-
-  // Short/repeat-visit replay: only the already-lit base, quick fade in, no full chain, no sound.
-  if (mode === "short" && phase !== "gate") {
-    return (
-      <div
-        className={`fixed inset-0 z-50 overflow-hidden bg-black transition-opacity ease-out ${
-          isLeaving ? "pointer-events-none opacity-0" : "opacity-100"
-        }`}
-        style={{ transitionDuration: `${exitDurationMs}ms` }}
-      >
-        <div className="absolute inset-0 animate-[ffl-scene-9-quick_500ms_ease-out_forwards]">
-          <Image src="/home/opening/scene-09.jpg" alt="" fill priority sizes="100vw" className="object-cover object-center" />
-        </div>
-        <style>{`@keyframes ffl-scene-9-quick { 0% { opacity: 0; transform: scale(0.96); } 100% { opacity: 1; transform: scale(1); } }`}</style>
-      </div>
-    );
-  }
 
   return (
-    <div
-      className={`fixed inset-0 z-50 overflow-hidden bg-black transition-opacity ease-out ${
-        isLeaving ? "pointer-events-none opacity-0" : "opacity-100"
-      }`}
-      style={{ transitionDuration: `${exitDurationMs}ms` }}
-    >
-      {/* SCENE 01–09 — the 10 approved master images, only crossfaded/scaled,
-          never redrawn. Each layer's own scale keeps moving continuously
-          across its whole visible life (not just at the edges), which is
-          what reads as a camera pushing through the space rather than a
-          slideshow. object-cover keeps every scene filling the frame
-          edge-to-edge with the vanishing point centered; the masters'
-          varying aspect ratios mean scenes 01/02 crop a little tight on
-          narrow mobile widths, an accepted trade-off over introducing bars. */}
-      {SCENE_NUMBERS.map((scene, index) => (
-        <div key={scene} className="absolute inset-0" style={sceneStyles[index]}>
-          <Image
-            src={`/home/opening/scene-${String(scene).padStart(2, "0")}.jpg`}
-            alt=""
-            fill
-            priority={scene <= 2}
-            sizes="100vw"
-            className="object-cover object-center"
-          />
-        </div>
-      ))}
+    <div ref={wrapperRef} className="fixed inset-0 z-50 overflow-hidden bg-black">
+      {/* The 4 approved master images. No style prop here for
+          opacity/transform — that's owned entirely by the rAF loop above
+          (and skipIntro/reduced paths), so a re-render from something
+          unrelated (e.g. the mute button) never resets mid-sequence state. */}
+      <div ref={l1Ref} className={`absolute inset-0 ${gateIdle ? "animate-[ffl-idle-creep_9s_ease-out_forwards,ffl-idle-breathe_3.4s_ease-in-out_infinite]" : ""}`}>
+        <Image src="/home/opening/scene-02.jpg" alt="" fill priority sizes="100vw" className="object-cover object-center" />
+      </div>
+      <div ref={l2Ref} className="absolute inset-0">
+        <Image src="/home/opening/scene-03.jpg" alt="" fill priority sizes="100vw" className="object-cover object-center" />
+      </div>
+      <div ref={l3Ref} className="absolute inset-0">
+        <Image src="/home/opening/scene-08.jpg" alt="" fill priority sizes="100vw" className="object-cover object-center" />
+      </div>
+      <div ref={l4Ref} className="absolute inset-0">
+        <Image src="/home/opening/scene-09.jpg" alt="" fill priority sizes="100vw" className="object-cover object-center" />
+      </div>
 
-      {/* SCENE 06 — the only full-frame flash in the whole sequence, layered
-          over the image's own baked-in flash for the "光を抜ける" breakthrough. */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 bg-[#fff8ec]"
-        style={flashAnimationStyle(playing)}
-      />
+      <style>{IDLE_KEYFRAMES}</style>
 
-      {/* SCENE 09 arrives dim — this scrim lifts in 3 discrete steps (one per
-          "カチッ") so the base visibly wakes up from darkness instead of
-          appearing already fully lit. Hidden instantly once leaving starts. */}
-      {nineArrived && !isLeaving && (
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 bg-black transition-opacity duration-[420ms] ease-out"
-          style={{ opacity: LIGHTING_SCRIM_BY_COUNT[Math.min(litCount, LIGHTING_SCRIM_BY_COUNT.length - 1)] }}
-        />
-      )}
-
-      {/* SCENE 09 — three staged lamp-bloom accents, synced to the three "カチッ" clicks, punching through the scrim above as each lamp turns on. */}
-      {!isLeaving &&
-        LIGHTING_BLOOMS.map((bloom, index) => (
-          <div
-            key={index}
-            aria-hidden="true"
-            className="pointer-events-none absolute rounded-full transition-opacity duration-500 ease-out"
-            style={{
-              left: `${bloom.left}%`,
-              top: `${bloom.top}%`,
-              width: `${bloom.size}vw`,
-              height: `${bloom.size}vw`,
-              transform: "translate(-50%, -50%)",
-              background: "radial-gradient(circle, rgba(255,224,170,0.75) 0%, rgba(255,190,110,0.3) 45%, transparent 72%)",
-              filter: "blur(7px)",
-              mixBlendMode: "screen",
-              opacity: litCount >= index + 1 ? 1 : 0,
-            }}
-          />
-        ))}
-
-      <style>{SCENE_KEYFRAMES}</style>
-      <style>{FLASH_KEYFRAMES}</style>
-
-      {/* SCENE 01 — the only control in the whole experience: an invisible
-          hotspot over the light already drawn by the SCENE layers above
-          (scene1 sits at opacity 1 until "playing" starts). No duplicate
-          image, no drawn dot, no logo, no START screen. */}
+      {/* SCENE A — the only control in the whole experience: an invisible
+          hotspot over the light already drawn by scene-02.jpg above. No
+          duplicate image, no drawn dot, no logo, no START screen. */}
       {showGate && (
         <div className="absolute inset-0 z-10">
           <button
@@ -300,12 +360,11 @@ export function OpeningSequence({ exitDurationMs }: OpeningSequenceProps) {
             <span className="absolute h-3 w-3 rounded-full border border-theme-accent/50 opacity-0 [animation:ffl-hint-ripple_4.5s_ease-out_infinite]" />
             <span className="absolute h-3 w-3 rounded-full transition-transform duration-300 group-hover:scale-150 group-hover:bg-theme-accent/10" />
           </button>
-          <style>{`@keyframes ffl-hint-ripple { 0%, 82% { opacity: 0; transform: scale(1); } 88% { opacity: 0.4; } 100% { opacity: 0; transform: scale(9); } }`}</style>
         </div>
       )}
 
-      {/* Persistent controls — hidden instantly (not faded) once leaving starts, so they don't linger over the SCENE 09→10 handoff. */}
-      {!showGate && !isLeaving && (
+      {/* Persistent controls */}
+      {!showGate && (
         <button
           type="button"
           onClick={toggleMute}
@@ -325,15 +384,13 @@ export function OpeningSequence({ exitDurationMs }: OpeningSequenceProps) {
           )}
         </button>
       )}
-      {!isLeaving && (
-        <button
-          type="button"
-          onClick={skipIntro}
-          className="absolute left-4 top-4 z-20 flex min-h-11 items-center rounded px-3 font-body text-[10px] tracking-[0.15em] text-brand-ivory-muted/40 transition-colors hover:text-brand-ivory-muted"
-        >
-          SKIP INTRO
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={skipIntro}
+        className="absolute left-4 top-4 z-20 flex min-h-11 items-center rounded px-3 font-body text-[10px] tracking-[0.15em] text-brand-ivory-muted/40 transition-colors hover:text-brand-ivory-muted"
+      >
+        SKIP INTRO
+      </button>
     </div>
   );
 }
