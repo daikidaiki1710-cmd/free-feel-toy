@@ -15,15 +15,14 @@ import {
   stopAmbient,
 } from "@/lib/introSound";
 import {
-  ARRIVAL_HOLD,
-  ARRIVAL_WASH_KEYFRAMES,
   FLASH_KEYFRAMES,
+  LEAVE_AT,
   LIGHTING_DURATION,
   LIGHTING_SCRIM_BY_COUNT,
+  LIGHTING_START,
   SCENE_COUNT,
-  SCENE_LAYERS,
-  SCENE_START,
-  arrivalWashAnimationStyle,
+  SCENE_DELAY,
+  SCENE_FULL_AT,
   buildSceneKeyframes,
   flashAnimationStyle,
   sceneAnimationStyle,
@@ -32,6 +31,7 @@ import {
 type Phase = "gate" | "sequence" | "leaving" | "done";
 
 const SCENE_KEYFRAMES = buildSceneKeyframes();
+const SCENE_NUMBERS = Array.from({ length: SCENE_COUNT }, (_, i) => i + 1);
 
 /** Approximate lamp positions in scene-09.jpg (the already-lit base) for the three "カチッ" bloom accents. */
 const LIGHTING_BLOOMS = [
@@ -52,8 +52,14 @@ type OpeningSequenceProps = {
  * (public/home/opening/scene-01..09.jpg). SCENE 10 itself needs no asset
  * here — it's the always-mounted HomeFinal/HomeFinalMobile already sitting
  * beneath this overlay in page.tsx; dissolving this overlay's opacity to 0
- * *is* the arrival. This component only places, times, crossfades and
- * sound-syncs the 9 finished images — it never draws its own rings/tunnel/light.
+ * *is* the arrival.
+ *
+ * Each scene layer runs its own crossfade (opacity) AND its own continuous
+ * scale animation across its *entire* visible lifetime — not just at the
+ * crossfade edges — so it reads as one camera pushing through each image's
+ * own space rather than a slideshow of static frames. SCENE 06 carries the
+ * only full-frame flash in the whole sequence; every other handoff is pure
+ * crossfade + scale, never a brightness pop.
  */
 export function OpeningSequence({ exitDurationMs }: OpeningSequenceProps) {
   const mode = useIntroMode();
@@ -116,9 +122,9 @@ export function OpeningSequence({ exitDurationMs }: OpeningSequenceProps) {
   }, [reducedMotion, exitDurationMs]);
 
   // SCENE 01: tapping the light is the only gesture in the whole
-  // experience. It unlocks audio and launches the SCENE 02–09 crossfade —
+  // experience. It unlocks audio and launches the SCENE 02–09 sequence —
   // the images themselves carry the ripple/ring/tunnel/base, this only
-  // times and sound-syncs the handoff between them.
+  // times, moves (scale) and sound-syncs the handoff between them.
   async function handleIgnite() {
     const ok = await resumeAudio();
     if (ok) startAmbient();
@@ -127,31 +133,30 @@ export function OpeningSequence({ exitDurationMs }: OpeningSequenceProps) {
     setPlaying(true);
 
     // SCENE 02 — small click already played; the low "ブゥ…" as the ripple spreads.
-    timers.current.push(setTimeout(() => playElectricHum(400), 60));
+    timers.current.push(setTimeout(() => playElectricHum(500), 80));
     // SCENE 03 — "ブゥゥン…" as the ring activates.
-    timers.current.push(setTimeout(() => playMechanicalHum(600), SCENE_START[2]));
+    timers.current.push(setTimeout(() => playMechanicalHum(700), SCENE_FULL_AT[3]));
     // SCENE 04→05 — one continuous rising sweep through the acceleration and the suction.
     timers.current.push(
-      setTimeout(() => playWarpRise(SCENE_START[6] - SCENE_START[3]), SCENE_START[3])
+      setTimeout(() => playWarpRise(SCENE_FULL_AT[6] - SCENE_FULL_AT[4]), SCENE_FULL_AT[4])
     );
     // SCENE 06 — "シュン" right as the light is broken through.
-    timers.current.push(setTimeout(() => playWhoosh(300), Math.max(0, SCENE_START[5] - 150)));
+    timers.current.push(setTimeout(() => playWhoosh(300), Math.max(0, SCENE_FULL_AT[6] - 150)));
 
-    // SCENE 09 — the base arrives dim (scrim up); three staged lamp clicks
-    // then lift it in steps, "暗め→カチッ→一部点灯→カチッ→さらに→カチッ→完全点灯".
-    const lightingStart = SCENE_START[SCENE_COUNT];
-    timers.current.push(setTimeout(() => setNineArrived(true), SCENE_START[SCENE_COUNT - 1]));
-    [0, LIGHTING_DURATION * 0.36, LIGHTING_DURATION * 0.72].forEach((offset, i) => {
+    // SCENE 09 arrives dim (scrim up); three staged lamp clicks then lift it
+    // in steps, "暗め→カチッ→一部点灯→カチッ→さらに→カチッ→完全点灯".
+    timers.current.push(setTimeout(() => setNineArrived(true), SCENE_DELAY[SCENE_COUNT]));
+    [0, LIGHTING_DURATION * 0.4, LIGHTING_DURATION * 0.8].forEach((offset, i) => {
       timers.current.push(
         setTimeout(() => {
           playClick();
           setLitCount(i + 1);
-        }, lightingStart + offset)
+        }, LIGHTING_START + offset)
       );
     });
 
     // SCENE 10 — hold in silence on the fully-lit base, then dissolve into real HOME.
-    timers.current.push(setTimeout(() => leave(), lightingStart + LIGHTING_DURATION + ARRIVAL_HOLD));
+    timers.current.push(setTimeout(() => leave(), LEAVE_AT));
   }
 
   function toggleMute() {
@@ -161,7 +166,7 @@ export function OpeningSequence({ exitDurationMs }: OpeningSequenceProps) {
     });
   }
 
-  const sceneStyles = useMemo(() => SCENE_LAYERS.map((layer) => sceneAnimationStyle(layer, playing)), [playing]);
+  const sceneStyles = useMemo(() => SCENE_NUMBERS.map((scene) => sceneAnimationStyle(scene, playing)), [playing]);
 
   if (phase === "done") return null;
 
@@ -208,40 +213,28 @@ export function OpeningSequence({ exitDurationMs }: OpeningSequenceProps) {
       style={{ transitionDuration: `${exitDurationMs}ms` }}
     >
       {/* SCENE 01–09 — the 10 approved master images, only crossfaded/scaled,
-          never redrawn. object-cover keeps every scene filling the frame
-          edge-to-edge (no letterbox bars breaking the continuous-camera
-          feel) with the vanishing point centered; the masters' varying
-          aspect ratios mean scenes 01/02 crop a little tight on narrow
-          mobile widths, an accepted trade-off over introducing bars. */}
-      {SCENE_LAYERS.map((layer, index) => (
-        <div
-          key={layer.scene}
-          className="absolute inset-0"
-          style={
-            layer.scene === SCENE_COUNT && isLeaving && nineArrived
-              ? // SCENE 09 → 10 handoff: no black dip — the base itself keeps
-                // pushing forward (continuing the same scale-up language as
-                // every other transition) while it dissolves directly into
-                // real HOME beneath, instead of the whole overlay just
-                // flattening to black first. Only applied once SCENE 09 has
-                // genuinely arrived — an early SKIP INTRO still just fades
-                // the whole overlay uniformly, per the normal sceneStyles.
-                { opacity: 1, transform: "scale(1.05)", transition: `transform ${exitDurationMs}ms ease-in` }
-              : sceneStyles[index]
-          }
-        >
+          never redrawn. Each layer's own scale keeps moving continuously
+          across its whole visible life (not just at the edges), which is
+          what reads as a camera pushing through the space rather than a
+          slideshow. object-cover keeps every scene filling the frame
+          edge-to-edge with the vanishing point centered; the masters'
+          varying aspect ratios mean scenes 01/02 crop a little tight on
+          narrow mobile widths, an accepted trade-off over introducing bars. */}
+      {SCENE_NUMBERS.map((scene, index) => (
+        <div key={scene} className="absolute inset-0" style={sceneStyles[index]}>
           <Image
-            src={`/home/opening/scene-${String(layer.scene).padStart(2, "0")}.jpg`}
+            src={`/home/opening/scene-${String(scene).padStart(2, "0")}.jpg`}
             alt=""
             fill
-            priority={layer.scene <= 2}
+            priority={scene <= 2}
             sizes="100vw"
             className="object-cover object-center"
           />
         </div>
       ))}
 
-      {/* SCENE 06 — a brief, minimal pulse layered over the image's own baked-in flash. Never a long white screen. */}
+      {/* SCENE 06 — the only full-frame flash in the whole sequence, layered
+          over the image's own baked-in flash for the "光を抜ける" breakthrough. */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 bg-[#fff8ec]"
@@ -280,29 +273,11 @@ export function OpeningSequence({ exitDurationMs }: OpeningSequenceProps) {
           />
         ))}
 
-      {/* SCENE 09 → 10 — a brief warm wash right at the handoff. A flat
-          opacity crossfade between two dark/moody images (the lit base and
-          real HOME) dims further at the midpoint by simple alpha blending;
-          this sells "the space fills with light and becomes HOME" instead,
-          without touching HomeFinal itself. */}
-      {isLeaving && nineArrived && (
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background: "radial-gradient(ellipse at 50% 45%, rgba(255,228,185,0.95) 0%, rgba(255,192,120,0.55) 38%, rgba(0,0,0,0) 72%)",
-            mixBlendMode: "screen",
-            ...arrivalWashAnimationStyle(exitDurationMs),
-          }}
-        />
-      )}
-
       <style>{SCENE_KEYFRAMES}</style>
       <style>{FLASH_KEYFRAMES}</style>
-      <style>{ARRIVAL_WASH_KEYFRAMES}</style>
 
       {/* SCENE 01 — the only control in the whole experience: an invisible
-          hotspot over the light already drawn by the SCENE_LAYERS map above
+          hotspot over the light already drawn by the SCENE layers above
           (scene1 sits at opacity 1 until "playing" starts). No duplicate
           image, no drawn dot, no logo, no START screen. */}
       {showGate && (
