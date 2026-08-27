@@ -99,6 +99,48 @@ export function playMechanicalHum(duration = 1.1) {
   osc.stop(t + duration + 0.2);
 }
 
+/** Rising sweep + filter opening — the "ブゥゥゥワーーーン" of accelerating into the warp tunnel. */
+export function playWarpRise(duration = 1700) {
+  const c = ctx;
+  if (!c || !masterGain) return;
+  const t = c.currentTime;
+  const seconds = duration / 1000;
+  const osc = c.createOscillator();
+  osc.type = "sawtooth";
+  osc.frequency.setValueAtTime(70, t);
+  osc.frequency.exponentialRampToValueAtTime(260, t + seconds);
+  const filter = c.createBiquadFilter();
+  filter.type = "lowpass";
+  filter.frequency.setValueAtTime(450, t);
+  filter.frequency.exponentialRampToValueAtTime(2200, t + seconds);
+  const g = c.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.14, t + seconds * 0.6);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + seconds);
+  osc.connect(filter).connect(g).connect(masterGain);
+  osc.start(t);
+  osc.stop(t + seconds + 0.1);
+}
+
+/** A quick downward-pitched "シュン" — passing through the white flash at the end of the tunnel. */
+export function playWhoosh(duration = 320) {
+  const c = ctx;
+  if (!c || !masterGain) return;
+  const t = c.currentTime;
+  const seconds = duration / 1000;
+  const osc = c.createOscillator();
+  osc.type = "sine";
+  osc.frequency.setValueAtTime(1200, t);
+  osc.frequency.exponentialRampToValueAtTime(220, t + seconds);
+  const g = c.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.16, t + seconds * 0.25);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + seconds);
+  osc.connect(g).connect(masterGain);
+  osc.start(t);
+  osc.stop(t + seconds + 0.1);
+}
+
 /** Very quiet two-tone room-tone bed, held under the whole sequence and faded on exit (doubles as the closing "余韻"). */
 export function startAmbient() {
   const c = ctx;
