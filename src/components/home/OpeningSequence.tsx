@@ -6,6 +6,7 @@ import { markIntroSeen, usePrefersReducedMotion, useIntroMode } from "@/lib/useI
 import { playClick, playWarpRise, playWhoosh, resumeAudio, setMuted, startAmbient, stopAmbient } from "@/lib/introSound";
 import {
   BLEND_END,
+  DARK_HOLD_END,
   DISTANT_END,
   HOLD_END,
   LIGHTING_STAGES,
@@ -121,6 +122,16 @@ export function OpeningSequence({ exitDurationMs }: OpeningSequenceProps) {
           l2.style.opacity = String(u);
           l2.style.transform = scaleStr;
         }
+      } else if (t <= DARK_HOLD_END) {
+        // ② 到着直後の暗い間 — the base is fully visible but stays dark
+        // for a beat before any lamp lights, so lighting doesn't start
+        // the instant the room appears.
+        if (l1) l1.style.opacity = "0";
+        if (l2) {
+          l2.style.opacity = "1";
+          l2.style.transform = scaleStr;
+        }
+        if (scrim) scrim.style.opacity = String(STAGE_SCRIM[0]);
       } else if (t <= STAGE_BOUNDS[STAGE_BOUNDS.length - 1]) {
         // ② 近景＋照明 — camera has essentially stopped; a dark scrim
         // lifts in 5 explicit snap-then-hold steps (中央→左→右→天井・

@@ -15,11 +15,14 @@ export function smoothstep(x: number): number {
 export const DISTANT_END = 2600;
 // ① → ② blend — position/scale matched so it reads as the same camera continuing forward, not a new picture.
 export const BLEND_END = DISTANT_END + 600; // 3200
-// ② 近景 + 照明 — camera nearly stops; 5 staged lamp reveals (中央 → 左 → 右 → 天井・周辺 → 部屋全体).
-export const STAGE_BOUNDS = [BLEND_END, 3800, 4400, 5000, 5600, 6200] as const;
+// ② 近景 — arrives dark and stays dark for a beat before any lamp lights, so lighting doesn't start the instant the base appears.
+export const DARK_HOLD_END = BLEND_END + 800; // 4000
+// ② 照明 — camera nearly stops; 5 staged lamp reveals (中央 → 左 → 右 → 天井・周辺 → 部屋全体).
+export const STAGE_BOUNDS = [DARK_HOLD_END, 4600, 5200, 5800, 6400, 7000] as const;
 export const STAGE_SCRIM = [0.85, 0.6, 0.42, 0.26, 0.1, 0.0] as const;
 export const STAGE_TRANSITION_MS = 450;
-export const STAGE_PUNCH_MS = 180;
+// Each lamp's own glow spreads over 0.2–0.3s after it clicks on ("カチッ→ふわっ"), not an instant snap to full brightness.
+export const STAGE_PUNCH_MS = 260;
 // 余韻 — hold the finished, fully-lit base before connecting to HOME.
 export const HOLD_END = STAGE_BOUNDS[5] + 1500; // 7700
 // ③ HOME接続 — a further slow push while the whole overlay dissolves into real HOME.
