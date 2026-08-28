@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { markIntroSeen, usePrefersReducedMotion, useIntroMode } from "@/lib/useIntroMode";
 import { playClick, playWarpRise, playWhoosh, resumeAudio, setMuted, startAmbient, stopAmbient } from "@/lib/introSound";
 import {
+  ALREADY_LIT_CENTER,
   BLEND_END,
   DARK_HOLD_END,
   DISTANT_END,
@@ -112,7 +113,11 @@ export function OpeningSequence({ exitDurationMs }: OpeningSequenceProps) {
       } else if (t <= BLEND_END) {
         // ① → ② — position/scale matched, minimal blend: both layers
         // share the same continuously-growing scale so it reads as the
-        // same camera arriving, not a new picture.
+        // same camera arriving, not a new picture. The already-lit
+        // center/back lamp carries over unchanged (the scrim's gradient
+        // hole always exempts it); only the periphery — not yet lit —
+        // darkens gradually here, in step with scene-09 fading in, so
+        // there's no separate jump right after the blend completes.
         const u = smoothstep((t - DISTANT_END) / (BLEND_END - DISTANT_END));
         if (l1) {
           l1.style.opacity = String(1 - u);
@@ -122,6 +127,7 @@ export function OpeningSequence({ exitDurationMs }: OpeningSequenceProps) {
           l2.style.opacity = String(u);
           l2.style.transform = scaleStr;
         }
+        if (scrim) scrim.style.opacity = String(u * STAGE_SCRIM[0]);
       } else if (t <= DARK_HOLD_END) {
         // ② 到着直後の暗い間 — the base is fully visible but stays dark
         // for a beat before any lamp lights, so lighting doesn't start
@@ -311,10 +317,21 @@ export function OpeningSequence({ exitDurationMs }: OpeningSequenceProps) {
         <Image src="/home/opening/scene-09.jpg" alt="" fill priority sizes="100vw" className="object-cover object-center" />
       </div>
 
-      {/* ② dark scrim over scene-09, lifted in 5 explicit steps. */}
-      <div ref={scrimRef} aria-hidden="true" className="pointer-events-none absolute inset-0 bg-black" style={{ opacity: 0 }} />
+      {/* ② peripheral scrim over scene-09, lifted in 5 explicit steps — a
+          gradient with a permanent hole over the already-lit center/back
+          lamp, so that lamp (already visible since scene-07) is never
+          darkened or "reset". */}
+      <div
+        ref={scrimRef}
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0"
+        style={{
+          opacity: 0,
+          background: `radial-gradient(circle at ${ALREADY_LIT_CENTER.left}% ${ALREADY_LIT_CENTER.top}%, transparent 0%, transparent 15%, black 32%, black 100%)`,
+        }}
+      />
 
-      {/* ② the 5 staged lamp-bloom accents (中央・左・右・天井/周辺・部屋全体), punching through the scrim above one at a time. */}
+      {/* ② the 4 staged lamp-bloom accents (手前・左・右・天井/周辺・部屋全体), punching through the scrim above one at a time. */}
       {LIGHTING_STAGES.map((bloom, index) => (
         <div
           key={index}
