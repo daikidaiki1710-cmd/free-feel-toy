@@ -141,6 +141,173 @@ export function playWhoosh(duration = 320) {
   osc.stop(t + seconds + 0.1);
 }
 
+let noiseBuffer: AudioBuffer | null = null;
+function getNoiseBuffer(c: AudioContext): AudioBuffer {
+  if (!noiseBuffer) {
+    const length = c.sampleRate * 2;
+    noiseBuffer = c.createBuffer(1, length, c.sampleRate);
+    const data = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < length; i++) data[i] = Math.random() * 2 - 1;
+  }
+  return noiseBuffer;
+}
+
+/** A very thin, quiet low-frequency space tone — held under the camera's forward push through the tunnel, not a "sweep" or SFX. */
+export function playApproachDrone(duration = 2400) {
+  const c = ctx;
+  if (!c || !masterGain) return;
+  const t = c.currentTime;
+  const seconds = duration / 1000;
+  const g = c.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.045, t + seconds * 0.35);
+  g.gain.exponentialRampToValueAtTime(0.03, t + seconds * 0.75);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + seconds);
+  const filter = c.createBiquadFilter();
+  filter.type = "lowpass";
+  filter.frequency.value = 260;
+  [46, 46.7].forEach((freq) => {
+    const osc = c.createOscillator();
+    osc.type = "sine";
+    osc.frequency.value = freq;
+    osc.connect(filter);
+    osc.start(t);
+    osc.stop(t + seconds + 0.15);
+  });
+  filter.connect(g).connect(masterGain);
+
+  // A whisper of filtered noise for spatial grain, well under the tone itself.
+  const noise = c.createBufferSource();
+  noise.buffer = getNoiseBuffer(c);
+  noise.loop = true;
+  const noiseFilter = c.createBiquadFilter();
+  noiseFilter.type = "bandpass";
+  noiseFilter.frequency.value = 320;
+  noiseFilter.Q.value = 0.6;
+  const noiseGain = c.createGain();
+  noiseGain.gain.setValueAtTime(0.0001, t);
+  noiseGain.gain.exponentialRampToValueAtTime(0.012, t + seconds * 0.4);
+  noiseGain.gain.exponentialRampToValueAtTime(0.0001, t + seconds);
+  noise.connect(noiseFilter).connect(noiseGain).connect(masterGain);
+  noise.start(t);
+  noise.stop(t + seconds + 0.15);
+}
+
+/** The low tone dropping slightly deeper right as the base is reached — not a new sound, a subtle shift in the one already playing. */
+export function playArrivalDeepen(duration = 700) {
+  const c = ctx;
+  if (!c || !masterGain) return;
+  const t = c.currentTime;
+  const seconds = duration / 1000;
+  const osc = c.createOscillator();
+  osc.type = "sine";
+  osc.frequency.setValueAtTime(50, t);
+  osc.frequency.exponentialRampToValueAtTime(35, t + seconds);
+  const g = c.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.05, t + seconds * 0.4);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + seconds);
+  osc.connect(g).connect(masterGain);
+  osc.start(t);
+  osc.stop(t + seconds + 0.1);
+}
+
+/** A single dull mechanical latch — the first lamp only. Deliberately not the bright "click" used elsewhere, so lighting doesn't read as a repeated game-confirm sound. */
+export function playMechanicalLatch() {
+  const c = ctx;
+  if (!c || !masterGain) return;
+  const t = c.currentTime;
+  const noise = c.createBufferSource();
+  noise.buffer = getNoiseBuffer(c);
+  const noiseFilter = c.createBiquadFilter();
+  noiseFilter.type = "lowpass";
+  noiseFilter.frequency.value = 550;
+  const noiseGain = envelope(c, t, 0.004, 0.06, 0.05);
+  noise.connect(noiseFilter).connect(noiseGain).connect(masterGain);
+  noise.start(t);
+  noise.stop(t + 0.09);
+
+  const thump = c.createOscillator();
+  thump.type = "triangle";
+  thump.frequency.setValueAtTime(130, t);
+  thump.frequency.exponentialRampToValueAtTime(85, t + 0.09);
+  const thumpGain = envelope(c, t, 0.006, 0.09, 0.09);
+  thump.connect(thumpGain).connect(masterGain);
+  thump.start(t);
+  thump.stop(t + 0.12);
+}
+
+/** A soft electrical/spatial rise-and-settle — used for each lamp after the first. Pass a slightly different frequency per call so consecutive lights don't sound identical. */
+export function playElectricSwell(duration = 500, baseFreq = 140) {
+  const c = ctx;
+  if (!c || !masterGain) return;
+  const t = c.currentTime;
+  const seconds = duration / 1000;
+  const osc = c.createOscillator();
+  osc.type = "triangle";
+  osc.frequency.setValueAtTime(baseFreq * 0.8, t);
+  osc.frequency.exponentialRampToValueAtTime(baseFreq, t + seconds * 0.5);
+  const filter = c.createBiquadFilter();
+  filter.type = "bandpass";
+  filter.frequency.value = baseFreq * 3;
+  filter.Q.value = 0.8;
+  const g = c.createGain();
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(0.07, t + seconds * 0.3);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + seconds);
+  osc.connect(filter).connect(g).connect(masterGain);
+  osc.start(t);
+  osc.stop(t + seconds + 0.1);
+}
+
+/** The whole space powering on — a low warm swell and a thin high shimmer spreading together, no percussive attack. Used once, for the final lamp stage. */
+export function playFullPowerSwell(duration = 1500) {
+  const c = ctx;
+  if (!c || !masterGain) return;
+  const t = c.currentTime;
+  const seconds = duration / 1000;
+
+  const low = c.createOscillator();
+  low.type = "sine";
+  low.frequency.value = 55;
+  const lowGain = c.createGain();
+  lowGain.gain.setValueAtTime(0.0001, t);
+  lowGain.gain.exponentialRampToValueAtTime(0.07, t + seconds * 0.45);
+  lowGain.gain.exponentialRampToValueAtTime(0.0001, t + seconds);
+  low.connect(lowGain).connect(masterGain);
+  low.start(t);
+  low.stop(t + seconds + 0.15);
+
+  const high = c.createOscillator();
+  high.type = "sine";
+  high.frequency.value = 2200;
+  const highFilter = c.createBiquadFilter();
+  highFilter.type = "bandpass";
+  highFilter.frequency.value = 2200;
+  highFilter.Q.value = 1.2;
+  const highGain = c.createGain();
+  highGain.gain.setValueAtTime(0.0001, t + seconds * 0.15);
+  highGain.gain.exponentialRampToValueAtTime(0.02, t + seconds * 0.55);
+  highGain.gain.exponentialRampToValueAtTime(0.0001, t + seconds);
+  high.connect(highFilter).connect(highGain).connect(masterGain);
+  high.start(t);
+  high.stop(t + seconds + 0.15);
+
+  const noise = c.createBufferSource();
+  noise.buffer = getNoiseBuffer(c);
+  const noiseFilter = c.createBiquadFilter();
+  noiseFilter.type = "bandpass";
+  noiseFilter.frequency.value = 900;
+  noiseFilter.Q.value = 0.5;
+  const noiseGain = c.createGain();
+  noiseGain.gain.setValueAtTime(0.0001, t);
+  noiseGain.gain.exponentialRampToValueAtTime(0.015, t + seconds * 0.4);
+  noiseGain.gain.exponentialRampToValueAtTime(0.0001, t + seconds);
+  noise.connect(noiseFilter).connect(noiseGain).connect(masterGain);
+  noise.start(t);
+  noise.stop(t + seconds + 0.15);
+}
+
 /** Very quiet two-tone room-tone bed, held under the whole sequence and faded on exit (doubles as the closing "余韻"). */
 export function startAmbient() {
   const c = ctx;

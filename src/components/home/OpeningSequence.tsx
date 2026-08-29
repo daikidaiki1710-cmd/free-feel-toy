@@ -3,7 +3,18 @@
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { markIntroSeen, usePrefersReducedMotion, useIntroMode } from "@/lib/useIntroMode";
-import { playClick, playWarpRise, playWhoosh, resumeAudio, setMuted, startAmbient, stopAmbient } from "@/lib/introSound";
+import {
+  playApproachDrone,
+  playArrivalDeepen,
+  playClick,
+  playElectricSwell,
+  playFullPowerSwell,
+  playMechanicalLatch,
+  resumeAudio,
+  setMuted,
+  startAmbient,
+  stopAmbient,
+} from "@/lib/introSound";
 import {
   ALREADY_LIT_CENTER,
   BLEND_END,
@@ -254,14 +265,22 @@ export function OpeningSequence({ exitDurationMs }: OpeningSequenceProps) {
     if (l1Ref.current) l1Ref.current.style.animation = "none"; // stop the idle CSS animation before rAF takes over transform/opacity
     setPhase("sequence");
 
-    // ① — approaching the base.
-    timers.current.push(setTimeout(() => playWarpRise(2100), 150));
-    // ① → ② — arriving.
-    timers.current.push(setTimeout(() => playWhoosh(300), DISTANT_END + 60));
-    // ② — four staged lamp clicks ("カチッ……カチッ……カチッ……カチッ"); the 5th stage (部屋全体) settles without a click.
-    for (let i = 0; i < LIGHTING_STAGES.length - 1; i++) {
-      timers.current.push(setTimeout(() => playClick(), STAGE_BOUNDS[i]));
-    }
+    // ① — a very thin, quiet low-frequency space tone under the push through the tunnel.
+    timers.current.push(setTimeout(() => playApproachDrone(DISTANT_END - 150), 100));
+    // ① → ② — the tone deepens slightly right as the base is reached (not a new sound).
+    timers.current.push(setTimeout(() => playArrivalDeepen(700), BLEND_END));
+    // ② — the first lamp gets one small mechanical latch, never repeated;
+    // each lamp after that is a distinct, soft electrical/spatial swell
+    // (varied frequency per call so none of them sound the same); the
+    // final stage (部屋全体) swells low + a thin high shimmer together.
+    timers.current.push(setTimeout(() => playMechanicalLatch(), STAGE_BOUNDS[0]));
+    timers.current.push(setTimeout(() => playElectricSwell(500, 130), STAGE_BOUNDS[1]));
+    timers.current.push(setTimeout(() => playElectricSwell(520, 168), STAGE_BOUNDS[2]));
+    timers.current.push(setTimeout(() => playElectricSwell(560, 112), STAGE_BOUNDS[3]));
+    timers.current.push(setTimeout(() => playFullPowerSwell(1500), STAGE_BOUNDS[4]));
+    // HOME移行 — the ambient bed fades out gradually across the HOME
+    // dissolve itself, not abruptly after the sequence has already ended.
+    timers.current.push(setTimeout(() => stopAmbient((TOTAL_DURATION - HOLD_END) / 1000), HOLD_END));
 
     runSequence();
   }
