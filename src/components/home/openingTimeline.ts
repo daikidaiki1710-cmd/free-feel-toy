@@ -28,7 +28,7 @@ export const STAGE_TRANSITION_MS = 450;
 // Each lamp's own glow spreads over 0.2–0.3s after it clicks on ("カチッ→ふわっ"), not an instant snap to full brightness.
 export const STAGE_PUNCH_MS = 260;
 // 余韻 — hold the finished, fully-lit base before connecting to HOME.
-export const HOLD_END = STAGE_BOUNDS[5] + 1500; // 7700
+export const HOLD_END = STAGE_BOUNDS[5] + 3000; // 10000
 // ③ HOME接続 — a further slow push while the whole overlay dissolves into real HOME.
 export const TOTAL_DURATION = HOLD_END + 1300; // 9000
 
