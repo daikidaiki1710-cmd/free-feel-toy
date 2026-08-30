@@ -3,18 +3,7 @@
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { markIntroSeen, usePrefersReducedMotion, useIntroMode } from "@/lib/useIntroMode";
-import {
-  playApproachDrone,
-  playArrivalDeepen,
-  playClick,
-  playElectricSwell,
-  playFullPowerSwell,
-  playMechanicalLatch,
-  resumeAudio,
-  setMuted,
-  startAmbient,
-  stopAmbient,
-} from "@/lib/introSound";
+import { playOpeningScore, preloadOpeningScore, resumeAudio, setMuted, stopAmbient } from "@/lib/introSound";
 import {
   ALREADY_LIT_CENTER,
   BLEND_END,
@@ -94,6 +83,13 @@ export function OpeningSequence({ exitDurationMs }: OpeningSequenceProps) {
   useEffect(() => {
     if (l1Ref.current) l1Ref.current.style.opacity = "1";
     if (l2Ref.current) l2Ref.current.style.opacity = "0";
+  }, []);
+
+  // Fetch+decode the two opening-score audio files as early as possible
+  // (no user gesture needed for this part) so playback can start the
+  // instant the user taps, with no loading gap.
+  useEffect(() => {
+    preloadOpeningScore();
   }, []);
 
   function finishSequence() {
@@ -259,28 +255,13 @@ export function OpeningSequence({ exitDurationMs }: OpeningSequenceProps) {
   // carries the rest of the sequence.
   async function handleIgnite() {
     const ok = await resumeAudio();
-    if (ok) startAmbient();
-    playClick();
+    // Rock Cinematic starts immediately (0 -> 6.4s, synced to the final
+    // lighting stage), then Epic Hybrid Logo after a 0.15s gap — the
+    // opening's entire score, no separate click/SFX layer under it.
+    if (ok) void playOpeningScore();
     setGateIdle(false);
     if (l1Ref.current) l1Ref.current.style.animation = "none"; // stop the idle CSS animation before rAF takes over transform/opacity
     setPhase("sequence");
-
-    // ① — a very thin, quiet low-frequency space tone under the push through the tunnel.
-    timers.current.push(setTimeout(() => playApproachDrone(DISTANT_END - 150), 100));
-    // ① → ② — the tone deepens slightly right as the base is reached (not a new sound).
-    timers.current.push(setTimeout(() => playArrivalDeepen(700), BLEND_END));
-    // ② — the first lamp gets one small mechanical latch, never repeated;
-    // each lamp after that is a distinct, soft electrical/spatial swell
-    // (varied frequency per call so none of them sound the same); the
-    // final stage (部屋全体) swells low + a thin high shimmer together.
-    timers.current.push(setTimeout(() => playMechanicalLatch(), STAGE_BOUNDS[0]));
-    timers.current.push(setTimeout(() => playElectricSwell(500, 130), STAGE_BOUNDS[1]));
-    timers.current.push(setTimeout(() => playElectricSwell(520, 168), STAGE_BOUNDS[2]));
-    timers.current.push(setTimeout(() => playElectricSwell(560, 112), STAGE_BOUNDS[3]));
-    timers.current.push(setTimeout(() => playFullPowerSwell(1500), STAGE_BOUNDS[4]));
-    // HOME移行 — the ambient bed fades out gradually across the HOME
-    // dissolve itself, not abruptly after the sequence has already ended.
-    timers.current.push(setTimeout(() => stopAmbient((TOTAL_DURATION - HOLD_END) / 1000), HOLD_END));
 
     runSequence();
   }

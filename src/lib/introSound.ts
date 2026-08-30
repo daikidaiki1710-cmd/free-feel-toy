@@ -141,6 +141,78 @@ export function playWhoosh(duration = 320) {
   osc.stop(t + seconds + 0.1);
 }
 
+// --- Opening score: two supplied music beds (real recordings, not synthesis) ---
+// Rock Cinematic plays 0 -> 6.4s (synced to the final lighting stage);
+// after a short gap, Epic Hybrid Logo enters as the "the base woke up" hit,
+// then fades out naturally into the HOME transition.
+const ROCK_URL = "/sounds/rock-cinematic.mp3";
+const LOGO_URL = "/sounds/epic-hybrid-logo.mp3";
+let rockBuffer: AudioBuffer | null = null;
+let logoBuffer: AudioBuffer | null = null;
+let scoreLoadPromise: Promise<void> | null = null;
+
+async function decodeUrl(c: AudioContext, url: string): Promise<AudioBuffer> {
+  const res = await fetch(url);
+  const arr = await res.arrayBuffer();
+  return c.decodeAudioData(arr);
+}
+
+/** Kick off fetch+decode of both opening-score files early (no gesture needed for this part) so playback can start instantly at tap. */
+export function preloadOpeningScore() {
+  const c = getContext();
+  if (!c || scoreLoadPromise) return;
+  scoreLoadPromise = (async () => {
+    const [rock, logo] = await Promise.all([decodeUrl(c, ROCK_URL), decodeUrl(c, LOGO_URL)]);
+    rockBuffer = rock;
+    logoBuffer = logo;
+  })();
+}
+
+/**
+ * Rock Cinematic (0 -> 6.4s, the track's own natural build-and-decay arc)
+ * immediately followed by a 0.15s silence, then a trimmed excerpt of Epic
+ * Hybrid Logo (starting at its own quiet dip, offset 3.5s in the source,
+ * so its actual peak hit lands ~0.65s after it starts — right after the
+ * final lamp lights) softened in level and brightness, fading out into the
+ * HOME transition.
+ */
+export async function playOpeningScore() {
+  const c = getContext();
+  if (!c || !masterGain) return;
+  if (scoreLoadPromise) await scoreLoadPromise;
+  if (!rockBuffer || !logoBuffer || !masterGain) return;
+
+  const t0 = c.currentTime;
+  const rockDuration = 6.4;
+  const gap = 0.15;
+  const logoOffset = 3.5;
+  const logoDuration = 4.5;
+  const logoStart = t0 + rockDuration + gap;
+
+  const rockSrc = c.createBufferSource();
+  rockSrc.buffer = rockBuffer;
+  const rockGain = c.createGain();
+  rockGain.gain.setValueAtTime(0.5, t0);
+  rockGain.gain.setValueAtTime(0.5, t0 + rockDuration - 0.15);
+  rockGain.gain.exponentialRampToValueAtTime(0.0001, t0 + rockDuration);
+  rockSrc.connect(rockGain).connect(masterGain);
+  rockSrc.start(t0, 0, rockDuration);
+
+  const logoSrc = c.createBufferSource();
+  logoSrc.buffer = logoBuffer;
+  const logoFilter = c.createBiquadFilter();
+  logoFilter.type = "highshelf";
+  logoFilter.frequency.value = 5000;
+  logoFilter.gain.value = -7;
+  const logoGain = c.createGain();
+  logoGain.gain.setValueAtTime(0.001, logoStart);
+  logoGain.gain.exponentialRampToValueAtTime(0.36, logoStart + 0.12);
+  logoGain.gain.setValueAtTime(0.36, logoStart + logoDuration - 1.0);
+  logoGain.gain.exponentialRampToValueAtTime(0.0001, logoStart + logoDuration);
+  logoSrc.connect(logoFilter).connect(logoGain).connect(masterGain);
+  logoSrc.start(logoStart, logoOffset, logoDuration);
+}
+
 let noiseBuffer: AudioBuffer | null = null;
 function getNoiseBuffer(c: AudioContext): AudioBuffer {
   if (!noiseBuffer) {
