@@ -218,9 +218,13 @@ function unlockAudio(): AudioContext | null {
 //    fading tail handing off into Epic's own build) with no dropout,
 //    landing its hit exactly on the last lamp — not two separate parts
 //    with a gap between them.
-//  - EPIC_END is pinned to HOLD_END (11.0s); the source's own dynamics
-//    have already decayed to near-silence well before then, so nothing
-//    new is added after the 6.4s hit — only its own natural afterglow.
+//  - EPIC_END is pinned to HOLD_END (12.2s) so the finished base is held
+//    that much longer before HOME begins. Nothing new is added after the
+//    6.4s hit — epic-hybrid-logo.mp3's own remaining length from
+//    EPIC_OFFSET only reaches ~11.9s real time before the buffer itself
+//    runs out (it's already decayed to near-silence well before that),
+//    so EPIC_END just lets that natural afterglow play all the way out
+//    instead of being cut off early.
 const ROCK_OFFSET = 0.4;
 const ROCK_START = 0.0;
 const ROCK_END = 6.4;
@@ -228,7 +232,7 @@ const ROCK_GAIN = 0.75;
 
 const EPIC_OFFSET = 3.6;
 const EPIC_START = 5.8;
-const EPIC_END = 11.0;
+const EPIC_END = 12.2;
 const EPIC_GAIN = 0.65;
 
 /**

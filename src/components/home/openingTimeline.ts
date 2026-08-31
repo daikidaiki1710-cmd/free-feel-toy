@@ -30,10 +30,13 @@ export const STAGE_PUNCH_MS = 260;
 // 余韻 — hold the finished, fully-lit base before connecting to HOME. Long
 // enough to show the completed base at rest (Epic Hybrid Logo's "power-on"
 // hit and afterglow land inside this window — see introSound.ts) rather
-// than cutting straight to HOME the instant the last lamp settles.
-export const HOLD_END = STAGE_BOUNDS[5] + 4000; // 11000
+// than cutting straight to HOME the instant the last lamp settles. The
+// +1200 pushes HOME's start later so the finished base is held ~1.2s
+// longer before the transition begins, without touching HOME's own fade
+// length.
+export const HOLD_END = STAGE_BOUNDS[5] + 4000 + 1200; // 12200
 // ③ HOME接続 — a further slow push while the whole overlay dissolves into real HOME.
-export const TOTAL_DURATION = HOLD_END + 1300; // 12300
+export const TOTAL_DURATION = HOLD_END + 1300; // 13500
 
 /** [t, scale] checkpoints — piecewise-eased between consecutive pairs, so scale never jumps at the 遠景→近景 handoff. */
 export const SCALE_CHECKPOINTS: [number, number][] = [
