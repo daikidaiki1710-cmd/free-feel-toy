@@ -198,24 +198,31 @@ function unlockAudio(): AudioContext | null {
 // from an RMS/peak energy analysis of both source files matched against
 // the OpeningSequence timeline (openingTimeline.ts):
 //  - ROCK_OFFSET skips rock-cinematic.mp3's silent lead-in so its first
-//    real attack (file ~0.4s) lands right at TAP (ROCK_START = 0s).
-//  - Rock's own build lands its energy climax (file ~2.3s) inside the
-//    forward-push phase, then decays to near-silence well before
-//    ROCK_END, so nothing in it fires during the 4.0s+ lighting stages.
-//  - EPIC_START is pinned to STAGE_BOUNDS[3] (5.8s, the 天井・周辺 lamp)
-//    and EPIC_OFFSET starts on epic-hybrid-logo.mp3's own rise into its
-//    "powered on" hit, so that hit (file ~4.2s) lands exactly on 6.4s —
-//    STAGE_BOUNDS[4], the 部屋全体 full-light moment.
-//  - EPIC_END is pinned to HOLD_END (10.0s); the source's own dynamics
-//    have already decayed to near-silence by then.
+//    real attack (file ~0.4s) lands right at TAP (ROCK_START = 0s). Its
+//    own energy climax (file ~2.3s) lands inside the forward-push phase,
+//    then it decays continuously — no artificial cutoff/fade is applied;
+//    ROCK_END is only a generous upper duration cap, so what's actually
+//    heard from 5.0s through the 4.0s+ lighting stages is that same
+//    unbroken natural tail (already very quiet by then, not a hard stop)
+//    rather than a cut-and-silence edit.
+//  - The source runs out on its own around real ~6.0s (file ends at
+//    6.426s), already at ~0 amplitude — so true silence from there to
+//    EPIC_START is the material itself, not a forced mute.
+//  - EPIC_START leaves a deliberate ~0.2s of total silence after
+//    STAGE_BOUNDS[4] (6.4s, 部屋全体 full light) before Epic enters.
+//    EPIC_OFFSET starts right before epic-hybrid-logo.mp3's own sudden
+//    jump into its "powered on" hit (file 4.1 -> 4.2s), so that hit lands
+//    just after EPIC_START — a beat of dead silence, then the impact.
+//  - EPIC_END is pinned to HOLD_END (11.0s); the source's own dynamics
+//    have already decayed to near-silence well before then.
 const ROCK_OFFSET = 0.4;
 const ROCK_START = 0.0;
-const ROCK_END = 5.0;
+const ROCK_END = 6.4;
 const ROCK_GAIN = 0.75;
 
-const EPIC_OFFSET = 3.6;
-const EPIC_START = 5.8;
-const EPIC_END = 10.0;
+const EPIC_OFFSET = 4.1;
+const EPIC_START = 6.6;
+const EPIC_END = 11.0;
 const EPIC_GAIN = 0.65;
 
 /**
@@ -231,16 +238,13 @@ export function startOpeningScore(): void {
 
   const t0 = c.currentTime;
   const rockStartAt = t0 + ROCK_START;
-  const rockDuration = ROCK_END - ROCK_START;
 
   const rockSrc = c.createBufferSource();
   rockSrc.buffer = rockBuffer;
   const rockGain = c.createGain();
-  rockGain.gain.setValueAtTime(ROCK_GAIN, rockStartAt);
-  rockGain.gain.setValueAtTime(ROCK_GAIN, rockStartAt + rockDuration - 0.15);
-  rockGain.gain.exponentialRampToValueAtTime(0.0001, rockStartAt + rockDuration);
+  rockGain.gain.value = ROCK_GAIN;
   rockSrc.connect(rockGain).connect(masterGain);
-  rockSrc.start(rockStartAt, ROCK_OFFSET, rockDuration);
+  rockSrc.start(rockStartAt, ROCK_OFFSET, ROCK_END - ROCK_START);
 
   const logoStartAt = t0 + EPIC_START;
   const logoDuration = EPIC_END - EPIC_START;
