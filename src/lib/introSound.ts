@@ -206,22 +206,28 @@ function unlockAudio(): AudioContext | null {
 //    unbroken natural tail (already very quiet by then, not a hard stop)
 //    rather than a cut-and-silence edit.
 //  - The source runs out on its own around real ~6.0s (file ends at
-//    6.426s), already at ~0 amplitude — so true silence from there to
-//    EPIC_START is the material itself, not a forced mute.
-//  - EPIC_START leaves a deliberate ~0.2s of total silence after
-//    STAGE_BOUNDS[4] (6.4s, 部屋全体 full light) before Epic enters.
-//    EPIC_OFFSET starts right before epic-hybrid-logo.mp3's own sudden
-//    jump into its "powered on" hit (file 4.1 -> 4.2s), so that hit lands
-//    just after EPIC_START — a beat of dead silence, then the impact.
+//    6.426s), already at ~0 amplitude — a natural, near-silent tail, not
+//    a hard stop.
+//  - EPIC_START (5.8s) starts Epic before Rock's tail has fully run out,
+//    so the two overlap with no silent gap between them. EPIC_OFFSET
+//    (file 3.6s) is the start of epic-hybrid-logo.mp3's own rise
+//    (rms 0.16 -> 0.35 -> its real "powered on" impact at file 4.2s,
+//    rms 0.68) — 0.6s later, which is exactly EPIC_START + 0.6 = 6.4s,
+//    STAGE_BOUNDS[4], the 部屋全体 full-light moment. So the lighting
+//    stages at 4.0-6.4s get one continuous, gradually rising bed (Rock's
+//    fading tail handing off into Epic's own build) with no dropout,
+//    landing its hit exactly on the last lamp — not two separate parts
+//    with a gap between them.
 //  - EPIC_END is pinned to HOLD_END (11.0s); the source's own dynamics
-//    have already decayed to near-silence well before then.
+//    have already decayed to near-silence well before then, so nothing
+//    new is added after the 6.4s hit — only its own natural afterglow.
 const ROCK_OFFSET = 0.4;
 const ROCK_START = 0.0;
 const ROCK_END = 6.4;
 const ROCK_GAIN = 0.75;
 
-const EPIC_OFFSET = 4.1;
-const EPIC_START = 6.6;
+const EPIC_OFFSET = 3.6;
+const EPIC_START = 5.8;
 const EPIC_END = 11.0;
 const EPIC_GAIN = 0.65;
 
