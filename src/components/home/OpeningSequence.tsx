@@ -6,13 +6,10 @@ import { markIntroSeen, usePrefersReducedMotion, useIntroMode } from "@/lib/useI
 import {
   getAudioContextSnapshot,
   getScoreDiagnostics,
-  playDiagnosticTone,
-  playOpeningScore,
   preloadOpeningScore,
-  resumeAudio,
   setMuted,
+  startOpeningScore,
   stopAmbient,
-  unlockAudio,
 } from "@/lib/introSound";
 import {
   ALREADY_LIT_CENTER,
@@ -62,10 +59,14 @@ export function OpeningSequence({ exitDurationMs }: OpeningSequenceProps) {
   const [gateIdle, setGateIdle] = useState(true);
   const [muted, setMutedState] = useState(false);
 
-  // DIAGNOSTIC ONLY — on-screen audio debug readout (see 診断1/診断2).
-  // Remove once the real-device silence issue is root-caused.
+  // Whether both opening-score buffers have finished decoding — the tap
+  // hotspot stays inert until this is true, so the tap handler itself
+  // never has to fetch/decode/await anything.
+  const [scoreReady, setScoreReady] = useState(false);
+
+  // DIAGNOSTIC ONLY — on-screen audio debug readout confirming the fix:
+  // Rock source.start() must show a real number, not "pending".
   const [debugLines, setDebugLines] = useState<string[] | null>(null);
-  const diagToneRef = useRef<ReturnType<typeof playDiagnosticTone> | null>(null);
 
   const wrapperRef = useRef<HTMLDivElement>(null);
   const l1Ref = useRef<HTMLDivElement>(null);
@@ -101,10 +102,17 @@ export function OpeningSequence({ exitDurationMs }: OpeningSequenceProps) {
   }, []);
 
   // Fetch+decode the two opening-score audio files as early as possible
-  // (no user gesture needed for this part) so playback can start the
-  // instant the user taps, with no loading gap.
+  // (no user gesture needed for this part), and only allow the tap once
+  // both are ready — so the tap itself never fetches/decodes/awaits
+  // anything, only schedules already-prepared buffers.
   useEffect(() => {
-    preloadOpeningScore();
+    let cancelled = false;
+    preloadOpeningScore().then(() => {
+      if (!cancelled) setScoreReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   function finishSequence() {
@@ -265,26 +273,15 @@ export function OpeningSequence({ exitDurationMs }: OpeningSequenceProps) {
     };
   }, [reducedMotion, exitDurationMs]);
 
-  // ①: tapping the tunnel is the only gesture in the whole experience. It
-  // unlocks audio and launches the single continuous camera-timeline that
-  // carries the rest of the sequence.
-  async function handleIgnite() {
-    // DIAGNOSTIC ONLY (診断1) — a standalone 440Hz tone, OscillatorNode ->
-    // GainNode -> destination directly, nothing else in the chain. Must run
-    // first and synchronously, in the same tap gesture, before anything else.
-    diagToneRef.current = playDiagnosticTone();
-    setDebugLines(["starting diagnostics..."]);
-
-    // Must run synchronously, before any await, so the browser still
-    // attributes it to this exact tap gesture — this is what actually
-    // unlocks audible playback on iOS Safari, independent of whether the
-    // real score buffers have finished decoding yet.
-    unlockAudio();
-    const ok = await resumeAudio();
-    // Rock Cinematic starts immediately (0 -> 6.4s, synced to the final
-    // lighting stage), then Epic Hybrid Logo after a 0.15s gap — the
-    // opening's entire score, no separate click/SFX layer under it.
-    if (ok) void playOpeningScore();
+  // ①: tapping the tunnel is the only gesture in the whole experience.
+  // Fully synchronous — no fetch/decode/await in here — since both score
+  // buffers are already decoded by the time the hotspot is tappable
+  // (scoreReady gates that below). Unlocks audio and starts the score in
+  // the same tick, then launches the single continuous camera-timeline
+  // that carries the rest of the sequence.
+  function handleIgnite() {
+    startOpeningScore();
+    setDebugLines(["measuring..."]);
     setGateIdle(false);
     if (l1Ref.current) l1Ref.current.style.animation = "none"; // stop the idle CSS animation before rAF takes over transform/opacity
     setPhase("sequence");
@@ -292,23 +289,16 @@ export function OpeningSequence({ exitDurationMs }: OpeningSequenceProps) {
     runSequence();
   }
 
-  // DIAGNOSTIC ONLY (診断2) — poll and render the debug values on screen
-  // (not console-only, so a real iPhone can be read directly) once the
-  // diagnostic tone has fired. Stops once the sequence finishes.
+  // DIAGNOSTIC ONLY — on-screen readout confirming Rock source.start() now
+  // fires with a real AudioContext time instead of staying "pending".
   useEffect(() => {
-    if (!diagToneRef.current) return;
-    if (phase === "done") return;
+    if (phase !== "sequence") return;
     const id = setInterval(() => {
-      const tone = diagToneRef.current;
       const live = getAudioContextSnapshot();
       const score = getScoreDiagnostics();
       setDebugLines([
-        `AudioContext.state (tap時): ${tone?.contextState ?? "?"}`,
-        `AudioContext.state (現在): ${live?.state ?? "?"}`,
-        `AudioContext.currentTime (現在): ${live?.currentTime.toFixed(3) ?? "?"}`,
-        `destination接続: ${tone?.destinationConnected ?? "?"}`,
-        `診断osc.start(): ${tone?.oscStartTime.toFixed(3) ?? "?"}`,
-        `診断osc.stop(): ${tone?.oscStopTime.toFixed(3) ?? "?"}`,
+        `AudioContext.state: ${live?.state ?? "?"}`,
+        `AudioContext.currentTime: ${live?.currentTime.toFixed(3) ?? "?"}`,
         `Rock fetch: ${score.rockFetchStatus}`,
         `Rock decode: ${score.rockDecodeStatus}`,
         `Rock buffer.duration: ${score.rockBufferDuration?.toFixed(3) ?? "pending"}`,
@@ -428,6 +418,7 @@ export function OpeningSequence({ exitDurationMs }: OpeningSequenceProps) {
           <button
             type="button"
             onClick={handleIgnite}
+            disabled={!scoreReady}
             aria-label="光に触れてはじめる"
             className="group absolute flex items-center justify-center"
             style={{

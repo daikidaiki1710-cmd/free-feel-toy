@@ -26,20 +26,6 @@ function getContext(): AudioContext | null {
   return ctx;
 }
 
-/** Must be called from a user gesture handler (tap/click) to satisfy iOS/Safari autoplay policy. */
-export async function resumeAudio(): Promise<boolean> {
-  const c = getContext();
-  if (!c) return false;
-  if (c.state === "suspended") {
-    try {
-      await c.resume();
-    } catch {
-      return false;
-    }
-  }
-  return c.state === "running";
-}
-
 export function setMuted(muted: boolean) {
   if (masterGain) masterGain.gain.value = muted ? 0 : 0.5;
 }
@@ -197,70 +183,45 @@ async function decodeUrl(c: AudioContext, url: string, label?: "rock"): Promise<
   }
 }
 
-/** Kick off fetch+decode of both opening-score files early (no gesture needed for this part) so playback can start instantly at tap. */
-export function preloadOpeningScore() {
-  const c = getContext();
-  if (!c || scoreLoadPromise) return;
-  scoreLoadPromise = (async () => {
-    const [rock, logo] = await Promise.all([decodeUrl(c, ROCK_URL, "rock"), decodeUrl(c, LOGO_URL)]);
-    rockBuffer = rock;
-    logoBuffer = logo;
-  })();
-}
-
 /**
- * DIAGNOSTIC ONLY — isolates whether this AudioContext can reach the
- * device speaker AT ALL, independent of the MP3/decode/master-bus chain
- * above. OscillatorNode -> GainNode -> destination, nothing else in
- * between (no masterGain, no filter, no ambient). Must be called
- * synchronously from the tap handler, before any await.
+ * Kick off fetch+decode of both opening-score files as early as page load
+ * allows (no gesture needed for this part). Returns the load promise so
+ * callers can gate the tap itself on both buffers being ready — the tap
+ * handler must never fetch/decode/await anything, only schedule
+ * already-decoded buffers.
  */
-export function playDiagnosticTone(): {
-  contextState: string;
-  currentTimeAtCall: number;
-  destinationConnected: boolean;
-  oscStartTime: number;
-  oscStopTime: number;
-} {
+export function preloadOpeningScore(): Promise<void> {
   const c = getContext();
-  if (!c) {
-    return { contextState: "no-context", currentTimeAtCall: 0, destinationConnected: false, oscStartTime: 0, oscStopTime: 0 };
+  if (!c) return Promise.resolve();
+  if (!scoreLoadPromise) {
+    scoreLoadPromise = (async () => {
+      const [rock, logo] = await Promise.all([decodeUrl(c, ROCK_URL, "rock"), decodeUrl(c, LOGO_URL)]);
+      rockBuffer = rock;
+      logoBuffer = logo;
+    })();
   }
-  const contextState = c.state;
-  if (c.state === "suspended") void c.resume();
-  const osc = c.createOscillator();
-  osc.type = "sine";
-  osc.frequency.value = 440;
-  const gain = c.createGain();
-  gain.gain.value = 0.9;
-  osc.connect(gain);
-  gain.connect(c.destination);
-  const currentTimeAtCall = c.currentTime;
-  const oscStartTime = currentTimeAtCall;
-  const oscStopTime = oscStartTime + 0.5;
-  osc.start(oscStartTime);
-  osc.stop(oscStopTime);
-  return { contextState, currentTimeAtCall, destinationConnected: true, oscStartTime, oscStopTime };
+  return scoreLoadPromise;
 }
 
 let audioUnlocked = false;
 
 /**
- * Must be called SYNCHRONOUSLY, as the very first thing in the tap
- * handler, before any `await`. This is the actual iOS Safari fix: playing
- * a real buffer only *after* awaiting a network-dependent promise (as the
- * previous version did inside playOpeningScore) can lose the "user
- * gesture" association Safari requires for audible output, even though no
- * JS error is thrown and AudioContext.state reports "running". Resuming
- * the context AND starting one real buffer within the same synchronous
- * gesture tick — a near-silent single-sample buffer here — locks in
- * permission for this whole page load, so buffers started slightly later
- * (once decoded) still play audibly.
+ * Must be called SYNCHRONOUSLY, as the first thing in the tap handler,
+ * before anything else. Safari can report AudioContext.state as
+ * "interrupted" (a Safari-specific state, not just the spec's
+ * "suspended") when playback was blocked before this gesture; gating
+ * resume() on one specific state string previously left it uncalled in
+ * that case, and — separately — awaiting resume()'s promise before
+ * starting playback (the earlier architecture) could itself drop the
+ * gesture association on iOS. So: call resume() unconditionally
+ * (a no-op if already running) and never await it here; start a real
+ * buffer in the same synchronous tick to lock in permission for the rest
+ * of this page load.
  */
-export function unlockAudio(): AudioContext | null {
+function unlockAudio(): AudioContext | null {
   const c = getContext();
   if (!c || !masterGain) return null;
-  if (c.state === "suspended") void c.resume();
+  if (c.state !== "running") void c.resume();
   if (!audioUnlocked) {
     const silent = c.createBuffer(1, 1, c.sampleRate);
     const src = c.createBufferSource();
@@ -278,14 +239,17 @@ export function unlockAudio(): AudioContext | null {
  * Hybrid Logo (starting at its own quiet dip, offset 3.5s in the source,
  * so its actual peak hit lands ~0.65s after it starts — right after the
  * final lamp lights) softened in level and brightness, fading out into the
- * HOME transition. Assumes unlockAudio() was already called synchronously
- * in the same tap gesture before this (async) function was invoked.
+ * HOME transition.
+ *
+ * Must be called synchronously from the tap handler with both buffers
+ * already decoded (the caller gates the tap on isScoreReady()) — no
+ * fetch/decode/await happens in here, only nodes being created and
+ * started on already-prepared AudioBuffers, so every start() call lands
+ * in the same synchronous gesture tick as unlockAudio() above.
  */
-export async function playOpeningScore() {
+export function startOpeningScore(): void {
   const c = unlockAudio();
-  if (!c || !masterGain) return;
-  if (scoreLoadPromise) await scoreLoadPromise;
-  if (!rockBuffer || !logoBuffer || !masterGain) return;
+  if (!c || !masterGain || !rockBuffer || !logoBuffer) return;
 
   const t0 = c.currentTime;
   const rockDuration = 6.4;
