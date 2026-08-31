@@ -151,10 +151,50 @@ let rockBuffer: AudioBuffer | null = null;
 let logoBuffer: AudioBuffer | null = null;
 let scoreLoadPromise: Promise<void> | null = null;
 
-async function decodeUrl(c: AudioContext, url: string): Promise<AudioBuffer> {
-  const res = await fetch(url);
+// --- Diagnostic-only state, read by the on-screen debug overlay. Not used
+// by playback itself; purely observational so a real device (where
+// DevTools isn't available) can show what actually happened. ---
+export type ScoreDiagnostics = {
+  rockFetchStatus: string;
+  rockDecodeStatus: string;
+  rockBufferDuration: number | null;
+  realScoreStartedAt: number | null;
+};
+const scoreDiagnostics: ScoreDiagnostics = {
+  rockFetchStatus: "pending",
+  rockDecodeStatus: "pending",
+  rockBufferDuration: null,
+  realScoreStartedAt: null,
+};
+export function getScoreDiagnostics(): ScoreDiagnostics {
+  return { ...scoreDiagnostics };
+}
+export function getAudioContextSnapshot(): { state: string; currentTime: number } | null {
+  if (!ctx) return null;
+  return { state: ctx.state, currentTime: ctx.currentTime };
+}
+
+async function decodeUrl(c: AudioContext, url: string, label?: "rock"): Promise<AudioBuffer> {
+  let res: Response;
+  try {
+    res = await fetch(url);
+  } catch (e) {
+    if (label === "rock") scoreDiagnostics.rockFetchStatus = `network error: ${String(e)}`;
+    throw e;
+  }
+  if (label === "rock") scoreDiagnostics.rockFetchStatus = `${res.status} ${res.ok ? "OK" : "NG"}`;
   const arr = await res.arrayBuffer();
-  return c.decodeAudioData(arr);
+  try {
+    const buf = await c.decodeAudioData(arr);
+    if (label === "rock") {
+      scoreDiagnostics.rockDecodeStatus = "success";
+      scoreDiagnostics.rockBufferDuration = buf.duration;
+    }
+    return buf;
+  } catch (e) {
+    if (label === "rock") scoreDiagnostics.rockDecodeStatus = `error: ${String(e)}`;
+    throw e;
+  }
 }
 
 /** Kick off fetch+decode of both opening-score files early (no gesture needed for this part) so playback can start instantly at tap. */
@@ -162,10 +202,45 @@ export function preloadOpeningScore() {
   const c = getContext();
   if (!c || scoreLoadPromise) return;
   scoreLoadPromise = (async () => {
-    const [rock, logo] = await Promise.all([decodeUrl(c, ROCK_URL), decodeUrl(c, LOGO_URL)]);
+    const [rock, logo] = await Promise.all([decodeUrl(c, ROCK_URL, "rock"), decodeUrl(c, LOGO_URL)]);
     rockBuffer = rock;
     logoBuffer = logo;
   })();
+}
+
+/**
+ * DIAGNOSTIC ONLY — isolates whether this AudioContext can reach the
+ * device speaker AT ALL, independent of the MP3/decode/master-bus chain
+ * above. OscillatorNode -> GainNode -> destination, nothing else in
+ * between (no masterGain, no filter, no ambient). Must be called
+ * synchronously from the tap handler, before any await.
+ */
+export function playDiagnosticTone(): {
+  contextState: string;
+  currentTimeAtCall: number;
+  destinationConnected: boolean;
+  oscStartTime: number;
+  oscStopTime: number;
+} {
+  const c = getContext();
+  if (!c) {
+    return { contextState: "no-context", currentTimeAtCall: 0, destinationConnected: false, oscStartTime: 0, oscStopTime: 0 };
+  }
+  const contextState = c.state;
+  if (c.state === "suspended") void c.resume();
+  const osc = c.createOscillator();
+  osc.type = "sine";
+  osc.frequency.value = 440;
+  const gain = c.createGain();
+  gain.gain.value = 0.9;
+  osc.connect(gain);
+  gain.connect(c.destination);
+  const currentTimeAtCall = c.currentTime;
+  const oscStartTime = currentTimeAtCall;
+  const oscStopTime = oscStartTime + 0.5;
+  osc.start(oscStartTime);
+  osc.stop(oscStopTime);
+  return { contextState, currentTimeAtCall, destinationConnected: true, oscStartTime, oscStopTime };
 }
 
 let audioUnlocked = false;
@@ -226,6 +301,7 @@ export async function playOpeningScore() {
   rockGain.gain.setValueAtTime(0.7, t0 + rockDuration - 0.15);
   rockGain.gain.exponentialRampToValueAtTime(0.0001, t0 + rockDuration);
   rockSrc.connect(rockGain).connect(masterGain);
+  scoreDiagnostics.realScoreStartedAt = c.currentTime;
   rockSrc.start(t0, 0, rockDuration);
 
   const logoSrc = c.createBufferSource();

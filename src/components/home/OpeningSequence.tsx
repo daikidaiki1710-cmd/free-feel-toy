@@ -3,7 +3,17 @@
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { markIntroSeen, usePrefersReducedMotion, useIntroMode } from "@/lib/useIntroMode";
-import { playOpeningScore, preloadOpeningScore, resumeAudio, setMuted, stopAmbient, unlockAudio } from "@/lib/introSound";
+import {
+  getAudioContextSnapshot,
+  getScoreDiagnostics,
+  playDiagnosticTone,
+  playOpeningScore,
+  preloadOpeningScore,
+  resumeAudio,
+  setMuted,
+  stopAmbient,
+  unlockAudio,
+} from "@/lib/introSound";
 import {
   ALREADY_LIT_CENTER,
   BLEND_END,
@@ -51,6 +61,11 @@ export function OpeningSequence({ exitDurationMs }: OpeningSequenceProps) {
   const [phase, setPhase] = useState<Phase>("gate");
   const [gateIdle, setGateIdle] = useState(true);
   const [muted, setMutedState] = useState(false);
+
+  // DIAGNOSTIC ONLY — on-screen audio debug readout (see 診断1/診断2).
+  // Remove once the real-device silence issue is root-caused.
+  const [debugLines, setDebugLines] = useState<string[] | null>(null);
+  const diagToneRef = useRef<ReturnType<typeof playDiagnosticTone> | null>(null);
 
   const wrapperRef = useRef<HTMLDivElement>(null);
   const l1Ref = useRef<HTMLDivElement>(null);
@@ -254,6 +269,12 @@ export function OpeningSequence({ exitDurationMs }: OpeningSequenceProps) {
   // unlocks audio and launches the single continuous camera-timeline that
   // carries the rest of the sequence.
   async function handleIgnite() {
+    // DIAGNOSTIC ONLY (診断1) — a standalone 440Hz tone, OscillatorNode ->
+    // GainNode -> destination directly, nothing else in the chain. Must run
+    // first and synchronously, in the same tap gesture, before anything else.
+    diagToneRef.current = playDiagnosticTone();
+    setDebugLines(["starting diagnostics..."]);
+
     // Must run synchronously, before any await, so the browser still
     // attributes it to this exact tap gesture — this is what actually
     // unlocks audible playback on iOS Safari, independent of whether the
@@ -270,6 +291,32 @@ export function OpeningSequence({ exitDurationMs }: OpeningSequenceProps) {
 
     runSequence();
   }
+
+  // DIAGNOSTIC ONLY (診断2) — poll and render the debug values on screen
+  // (not console-only, so a real iPhone can be read directly) once the
+  // diagnostic tone has fired. Stops once the sequence finishes.
+  useEffect(() => {
+    if (!diagToneRef.current) return;
+    if (phase === "done") return;
+    const id = setInterval(() => {
+      const tone = diagToneRef.current;
+      const live = getAudioContextSnapshot();
+      const score = getScoreDiagnostics();
+      setDebugLines([
+        `AudioContext.state (tap時): ${tone?.contextState ?? "?"}`,
+        `AudioContext.state (現在): ${live?.state ?? "?"}`,
+        `AudioContext.currentTime (現在): ${live?.currentTime.toFixed(3) ?? "?"}`,
+        `destination接続: ${tone?.destinationConnected ?? "?"}`,
+        `診断osc.start(): ${tone?.oscStartTime.toFixed(3) ?? "?"}`,
+        `診断osc.stop(): ${tone?.oscStopTime.toFixed(3) ?? "?"}`,
+        `Rock fetch: ${score.rockFetchStatus}`,
+        `Rock decode: ${score.rockDecodeStatus}`,
+        `Rock buffer.duration: ${score.rockBufferDuration?.toFixed(3) ?? "pending"}`,
+        `Rock source.start()時刻: ${score.realScoreStartedAt?.toFixed(3) ?? "pending"}`,
+      ]);
+    }, 200);
+    return () => clearInterval(id);
+  }, [phase]);
 
   function skipIntro() {
     markIntroSeen();
@@ -311,6 +358,18 @@ export function OpeningSequence({ exitDurationMs }: OpeningSequenceProps) {
 
   return (
     <div ref={wrapperRef} className="fixed inset-0 z-50 overflow-hidden bg-black">
+      {/* DIAGNOSTIC ONLY (診断2) — visible on-screen debug readout, not
+          console-only, so it can be read on a real iPhone. Remove once the
+          audio-silence issue is root-caused. */}
+      {debugLines && (
+        <div
+          aria-hidden="true"
+          className="fixed inset-x-0 top-0 z-[999] whitespace-pre-wrap break-all bg-black/85 p-2 font-mono text-[10px] leading-tight text-lime-300"
+        >
+          {debugLines.join("\n")}
+        </div>
+      )}
+
       {/* The 2 approved master images. No style prop here for
           opacity/transform — that's owned entirely by the rAF loop above
           (and skipIntro/reduced paths), so a re-render from something
