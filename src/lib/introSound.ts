@@ -137,50 +137,10 @@ let rockBuffer: AudioBuffer | null = null;
 let logoBuffer: AudioBuffer | null = null;
 let scoreLoadPromise: Promise<void> | null = null;
 
-// --- Diagnostic-only state, read by the on-screen debug overlay. Not used
-// by playback itself; purely observational so a real device (where
-// DevTools isn't available) can show what actually happened. ---
-export type ScoreDiagnostics = {
-  rockFetchStatus: string;
-  rockDecodeStatus: string;
-  rockBufferDuration: number | null;
-  realScoreStartedAt: number | null;
-};
-const scoreDiagnostics: ScoreDiagnostics = {
-  rockFetchStatus: "pending",
-  rockDecodeStatus: "pending",
-  rockBufferDuration: null,
-  realScoreStartedAt: null,
-};
-export function getScoreDiagnostics(): ScoreDiagnostics {
-  return { ...scoreDiagnostics };
-}
-export function getAudioContextSnapshot(): { state: string; currentTime: number } | null {
-  if (!ctx) return null;
-  return { state: ctx.state, currentTime: ctx.currentTime };
-}
-
-async function decodeUrl(c: AudioContext, url: string, label?: "rock"): Promise<AudioBuffer> {
-  let res: Response;
-  try {
-    res = await fetch(url);
-  } catch (e) {
-    if (label === "rock") scoreDiagnostics.rockFetchStatus = `network error: ${String(e)}`;
-    throw e;
-  }
-  if (label === "rock") scoreDiagnostics.rockFetchStatus = `${res.status} ${res.ok ? "OK" : "NG"}`;
+async function decodeUrl(c: AudioContext, url: string): Promise<AudioBuffer> {
+  const res = await fetch(url);
   const arr = await res.arrayBuffer();
-  try {
-    const buf = await c.decodeAudioData(arr);
-    if (label === "rock") {
-      scoreDiagnostics.rockDecodeStatus = "success";
-      scoreDiagnostics.rockBufferDuration = buf.duration;
-    }
-    return buf;
-  } catch (e) {
-    if (label === "rock") scoreDiagnostics.rockDecodeStatus = `error: ${String(e)}`;
-    throw e;
-  }
+  return c.decodeAudioData(arr);
 }
 
 /**
@@ -195,7 +155,7 @@ export function preloadOpeningScore(): Promise<void> {
   if (!c) return Promise.resolve();
   if (!scoreLoadPromise) {
     scoreLoadPromise = (async () => {
-      const [rock, logo] = await Promise.all([decodeUrl(c, ROCK_URL, "rock"), decodeUrl(c, LOGO_URL)]);
+      const [rock, logo] = await Promise.all([decodeUrl(c, ROCK_URL), decodeUrl(c, LOGO_URL)]);
       rockBuffer = rock;
       logoBuffer = logo;
     })();
@@ -233,40 +193,57 @@ function unlockAudio(): AudioContext | null {
   return c;
 }
 
+// --- Opening score sync constants, kept together so timing/levels can be
+// re-tuned without hunting through the scheduling code below. Values come
+// from an RMS/peak energy analysis of both source files matched against
+// the OpeningSequence timeline (openingTimeline.ts):
+//  - ROCK_OFFSET skips rock-cinematic.mp3's silent lead-in so its first
+//    real attack (file ~0.4s) lands right at TAP (ROCK_START = 0s).
+//  - Rock's own build lands its energy climax (file ~2.3s) inside the
+//    forward-push phase, then decays to near-silence well before
+//    ROCK_END, so nothing in it fires during the 4.0s+ lighting stages.
+//  - EPIC_START is pinned to STAGE_BOUNDS[3] (5.8s, the 天井・周辺 lamp)
+//    and EPIC_OFFSET starts on epic-hybrid-logo.mp3's own rise into its
+//    "powered on" hit, so that hit (file ~4.2s) lands exactly on 6.4s —
+//    STAGE_BOUNDS[4], the 部屋全体 full-light moment.
+//  - EPIC_END is pinned to HOLD_END (10.0s); the source's own dynamics
+//    have already decayed to near-silence by then.
+const ROCK_OFFSET = 0.4;
+const ROCK_START = 0.0;
+const ROCK_END = 5.0;
+const ROCK_GAIN = 0.75;
+
+const EPIC_OFFSET = 3.6;
+const EPIC_START = 5.8;
+const EPIC_END = 10.0;
+const EPIC_GAIN = 0.65;
+
 /**
- * Rock Cinematic (0 -> 6.4s, the track's own natural build-and-decay arc)
- * immediately followed by a 0.15s silence, then a trimmed excerpt of Epic
- * Hybrid Logo (starting at its own quiet dip, offset 3.5s in the source,
- * so its actual peak hit lands ~0.65s after it starts — right after the
- * final lamp lights) softened in level and brightness, fading out into the
- * HOME transition.
- *
  * Must be called synchronously from the tap handler with both buffers
- * already decoded (the caller gates the tap on isScoreReady()) — no
- * fetch/decode/await happens in here, only nodes being created and
- * started on already-prepared AudioBuffers, so every start() call lands
- * in the same synchronous gesture tick as unlockAudio() above.
+ * already decoded (the caller gates the tap on the preloadOpeningScore()
+ * promise) — no fetch/decode/await happens in here, only nodes being
+ * created and started on already-prepared AudioBuffers, so every start()
+ * call lands in the same synchronous gesture tick as unlockAudio() above.
  */
 export function startOpeningScore(): void {
   const c = unlockAudio();
   if (!c || !masterGain || !rockBuffer || !logoBuffer) return;
 
   const t0 = c.currentTime;
-  const rockDuration = 6.4;
-  const gap = 0.15;
-  const logoOffset = 3.5;
-  const logoDuration = 4.5;
-  const logoStart = t0 + rockDuration + gap;
+  const rockStartAt = t0 + ROCK_START;
+  const rockDuration = ROCK_END - ROCK_START;
 
   const rockSrc = c.createBufferSource();
   rockSrc.buffer = rockBuffer;
   const rockGain = c.createGain();
-  rockGain.gain.setValueAtTime(0.7, t0);
-  rockGain.gain.setValueAtTime(0.7, t0 + rockDuration - 0.15);
-  rockGain.gain.exponentialRampToValueAtTime(0.0001, t0 + rockDuration);
+  rockGain.gain.setValueAtTime(ROCK_GAIN, rockStartAt);
+  rockGain.gain.setValueAtTime(ROCK_GAIN, rockStartAt + rockDuration - 0.15);
+  rockGain.gain.exponentialRampToValueAtTime(0.0001, rockStartAt + rockDuration);
   rockSrc.connect(rockGain).connect(masterGain);
-  scoreDiagnostics.realScoreStartedAt = c.currentTime;
-  rockSrc.start(t0, 0, rockDuration);
+  rockSrc.start(rockStartAt, ROCK_OFFSET, rockDuration);
+
+  const logoStartAt = t0 + EPIC_START;
+  const logoDuration = EPIC_END - EPIC_START;
 
   const logoSrc = c.createBufferSource();
   logoSrc.buffer = logoBuffer;
@@ -275,12 +252,12 @@ export function startOpeningScore(): void {
   logoFilter.frequency.value = 5000;
   logoFilter.gain.value = -6;
   const logoGain = c.createGain();
-  logoGain.gain.setValueAtTime(0.001, logoStart);
-  logoGain.gain.exponentialRampToValueAtTime(0.55, logoStart + 0.12);
-  logoGain.gain.setValueAtTime(0.55, logoStart + logoDuration - 1.0);
-  logoGain.gain.exponentialRampToValueAtTime(0.0001, logoStart + logoDuration);
+  logoGain.gain.setValueAtTime(0.001, logoStartAt);
+  logoGain.gain.exponentialRampToValueAtTime(EPIC_GAIN, logoStartAt + 0.12);
+  logoGain.gain.setValueAtTime(EPIC_GAIN, logoStartAt + logoDuration - 1.0);
+  logoGain.gain.exponentialRampToValueAtTime(0.0001, logoStartAt + logoDuration);
   logoSrc.connect(logoFilter).connect(logoGain).connect(masterGain);
-  logoSrc.start(logoStart, logoOffset, logoDuration);
+  logoSrc.start(logoStartAt, EPIC_OFFSET, logoDuration);
 }
 
 let noiseBuffer: AudioBuffer | null = null;

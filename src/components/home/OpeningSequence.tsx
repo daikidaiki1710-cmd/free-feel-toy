@@ -3,14 +3,7 @@
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { markIntroSeen, usePrefersReducedMotion, useIntroMode } from "@/lib/useIntroMode";
-import {
-  getAudioContextSnapshot,
-  getScoreDiagnostics,
-  preloadOpeningScore,
-  setMuted,
-  startOpeningScore,
-  stopAmbient,
-} from "@/lib/introSound";
+import { preloadOpeningScore, setMuted, startOpeningScore, stopAmbient } from "@/lib/introSound";
 import {
   ALREADY_LIT_CENTER,
   BLEND_END,
@@ -63,10 +56,6 @@ export function OpeningSequence({ exitDurationMs }: OpeningSequenceProps) {
   // hotspot stays inert until this is true, so the tap handler itself
   // never has to fetch/decode/await anything.
   const [scoreReady, setScoreReady] = useState(false);
-
-  // DIAGNOSTIC ONLY — on-screen audio debug readout confirming the fix:
-  // Rock source.start() must show a real number, not "pending".
-  const [debugLines, setDebugLines] = useState<string[] | null>(null);
 
   const wrapperRef = useRef<HTMLDivElement>(null);
   const l1Ref = useRef<HTMLDivElement>(null);
@@ -281,32 +270,12 @@ export function OpeningSequence({ exitDurationMs }: OpeningSequenceProps) {
   // that carries the rest of the sequence.
   function handleIgnite() {
     startOpeningScore();
-    setDebugLines(["measuring..."]);
     setGateIdle(false);
     if (l1Ref.current) l1Ref.current.style.animation = "none"; // stop the idle CSS animation before rAF takes over transform/opacity
     setPhase("sequence");
 
     runSequence();
   }
-
-  // DIAGNOSTIC ONLY — on-screen readout confirming Rock source.start() now
-  // fires with a real AudioContext time instead of staying "pending".
-  useEffect(() => {
-    if (phase !== "sequence") return;
-    const id = setInterval(() => {
-      const live = getAudioContextSnapshot();
-      const score = getScoreDiagnostics();
-      setDebugLines([
-        `AudioContext.state: ${live?.state ?? "?"}`,
-        `AudioContext.currentTime: ${live?.currentTime.toFixed(3) ?? "?"}`,
-        `Rock fetch: ${score.rockFetchStatus}`,
-        `Rock decode: ${score.rockDecodeStatus}`,
-        `Rock buffer.duration: ${score.rockBufferDuration?.toFixed(3) ?? "pending"}`,
-        `Rock source.start()時刻: ${score.realScoreStartedAt?.toFixed(3) ?? "pending"}`,
-      ]);
-    }, 200);
-    return () => clearInterval(id);
-  }, [phase]);
 
   function skipIntro() {
     markIntroSeen();
@@ -348,18 +317,6 @@ export function OpeningSequence({ exitDurationMs }: OpeningSequenceProps) {
 
   return (
     <div ref={wrapperRef} className="fixed inset-0 z-50 overflow-hidden bg-black">
-      {/* DIAGNOSTIC ONLY (診断2) — visible on-screen debug readout, not
-          console-only, so it can be read on a real iPhone. Remove once the
-          audio-silence issue is root-caused. */}
-      {debugLines && (
-        <div
-          aria-hidden="true"
-          className="fixed inset-x-0 top-0 z-[999] whitespace-pre-wrap break-all bg-black/85 p-2 font-mono text-[10px] leading-tight text-lime-300"
-        >
-          {debugLines.join("\n")}
-        </div>
-      )}
-
       {/* The 2 approved master images. No style prop here for
           opacity/transform — that's owned entirely by the rAF loop above
           (and skipIntro/reduced paths), so a re-render from something
