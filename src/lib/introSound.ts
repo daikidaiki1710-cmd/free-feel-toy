@@ -200,39 +200,39 @@ function unlockAudio(): AudioContext | null {
 //  - ROCK_OFFSET skips rock-cinematic.mp3's silent lead-in so its first
 //    real attack (file ~0.4s) lands right at TAP (ROCK_START = 0s). Its
 //    own energy climax (file ~2.3s) lands inside the forward-push phase,
-//    then it decays continuously — no artificial cutoff/fade is applied;
-//    ROCK_END is only a generous upper duration cap, so what's actually
-//    heard from 5.0s through the 4.0s+ lighting stages is that same
-//    unbroken natural tail (already very quiet by then, not a hard stop)
-//    rather than a cut-and-silence edit.
-//  - The source runs out on its own around real ~6.0s (file ends at
-//    6.426s), already at ~0 amplitude — a natural, near-silent tail, not
-//    a hard stop.
-//  - EPIC_START (5.8s) starts Epic before Rock's tail has fully run out,
-//    so the two overlap with no silent gap between them. EPIC_OFFSET
-//    (file 3.6s) is the start of epic-hybrid-logo.mp3's own rise
-//    (rms 0.16 -> 0.35 -> its real "powered on" impact at file 4.2s,
-//    rms 0.68) — 0.6s later, which is exactly EPIC_START + 0.6 = 6.4s,
-//    STAGE_BOUNDS[4], the 部屋全体 full-light moment. So the lighting
-//    stages at 4.0-6.4s get one continuous, gradually rising bed (Rock's
-//    fading tail handing off into Epic's own build) with no dropout,
-//    landing its hit exactly on the last lamp — not two separate parts
-//    with a gap between them.
+//    then it decays continuously through the dark hold and the first
+//    lighting stages — no artificial cutoff, just its own natural tail.
+//  - ROCK_CROSSFADE_START/END hand off from Rock to Epic over real
+//    3.8-4.2s: right where the first lamp lights (4.0s), Rock is faded
+//    the rest of the way to silence so it doesn't linger as a second,
+//    separate layer once Epic (already moderately loud by comparison)
+//    takes over as the sole voice.
+//  - EPIC_START (4.0s) starts Epic Hybrid Logo right as the first lamp
+//    lights, so its own dynamics carry the *entire* 4.0-6.4s lighting
+//    sequence as one continuous piece — not two separate parts. From
+//    EPIC_OFFSET (file 1.8s) it holds a moderate presence through the
+//    first few lamps, dips to its quietest point (file ~3.6s, right
+//    around STAGE_BOUNDS[3]) as a "溜め", then surges into its real
+//    "powered on" impact at file 4.2s (rms 0.68, the track's global
+//    peak) — landing exactly on EPIC_START + (4.2 - 1.8) = 6.4s,
+//    STAGE_BOUNDS[4], the 部屋全体 full-light moment.
 //  - EPIC_END lets epic-hybrid-logo.mp3's own remaining length from
 //    EPIC_OFFSET play out in full — it only reaches ~11.9s real time
 //    before the buffer itself runs out (already decayed to near-silence
 //    well before that). Nothing new is added after the 6.4s hit; this is
-//    just its natural afterglow, not an artificial extension. openingTimeline.ts's
-//    HOLD_END is free to extend further than this on its own (to hold on
-//    the finished, now-silent picture for a beat) without adding any new
-//    sound here.
+//    just its natural afterglow, not an artificial extension.
+//    openingTimeline.ts's HOLD_END is free to extend further than this on
+//    its own (to hold on the finished, now-silent picture for a beat)
+//    without adding any new sound here.
 const ROCK_OFFSET = 0.4;
 const ROCK_START = 0.0;
 const ROCK_END = 6.4;
 const ROCK_GAIN = 0.75;
+const ROCK_CROSSFADE_START = 3.8;
+const ROCK_CROSSFADE_END = 4.2;
 
-const EPIC_OFFSET = 3.6;
-const EPIC_START = 5.8;
+const EPIC_OFFSET = 1.8;
+const EPIC_START = 4.0;
 const EPIC_END = 12.2;
 const EPIC_GAIN = 0.65;
 
@@ -253,7 +253,9 @@ export function startOpeningScore(): void {
   const rockSrc = c.createBufferSource();
   rockSrc.buffer = rockBuffer;
   const rockGain = c.createGain();
-  rockGain.gain.value = ROCK_GAIN;
+  rockGain.gain.setValueAtTime(ROCK_GAIN, rockStartAt);
+  rockGain.gain.setValueAtTime(ROCK_GAIN, t0 + ROCK_CROSSFADE_START);
+  rockGain.gain.exponentialRampToValueAtTime(0.0001, t0 + ROCK_CROSSFADE_END);
   rockSrc.connect(rockGain).connect(masterGain);
   rockSrc.start(rockStartAt, ROCK_OFFSET, ROCK_END - ROCK_START);
 
