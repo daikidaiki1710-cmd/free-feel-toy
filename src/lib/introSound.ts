@@ -168,16 +168,46 @@ export function preloadOpeningScore() {
   })();
 }
 
+let audioUnlocked = false;
+
+/**
+ * Must be called SYNCHRONOUSLY, as the very first thing in the tap
+ * handler, before any `await`. This is the actual iOS Safari fix: playing
+ * a real buffer only *after* awaiting a network-dependent promise (as the
+ * previous version did inside playOpeningScore) can lose the "user
+ * gesture" association Safari requires for audible output, even though no
+ * JS error is thrown and AudioContext.state reports "running". Resuming
+ * the context AND starting one real buffer within the same synchronous
+ * gesture tick — a near-silent single-sample buffer here — locks in
+ * permission for this whole page load, so buffers started slightly later
+ * (once decoded) still play audibly.
+ */
+export function unlockAudio(): AudioContext | null {
+  const c = getContext();
+  if (!c || !masterGain) return null;
+  if (c.state === "suspended") void c.resume();
+  if (!audioUnlocked) {
+    const silent = c.createBuffer(1, 1, c.sampleRate);
+    const src = c.createBufferSource();
+    src.buffer = silent;
+    src.connect(masterGain);
+    src.start(0);
+    audioUnlocked = true;
+  }
+  return c;
+}
+
 /**
  * Rock Cinematic (0 -> 6.4s, the track's own natural build-and-decay arc)
  * immediately followed by a 0.15s silence, then a trimmed excerpt of Epic
  * Hybrid Logo (starting at its own quiet dip, offset 3.5s in the source,
  * so its actual peak hit lands ~0.65s after it starts — right after the
  * final lamp lights) softened in level and brightness, fading out into the
- * HOME transition.
+ * HOME transition. Assumes unlockAudio() was already called synchronously
+ * in the same tap gesture before this (async) function was invoked.
  */
 export async function playOpeningScore() {
-  const c = getContext();
+  const c = unlockAudio();
   if (!c || !masterGain) return;
   if (scoreLoadPromise) await scoreLoadPromise;
   if (!rockBuffer || !logoBuffer || !masterGain) return;
@@ -192,8 +222,8 @@ export async function playOpeningScore() {
   const rockSrc = c.createBufferSource();
   rockSrc.buffer = rockBuffer;
   const rockGain = c.createGain();
-  rockGain.gain.setValueAtTime(0.5, t0);
-  rockGain.gain.setValueAtTime(0.5, t0 + rockDuration - 0.15);
+  rockGain.gain.setValueAtTime(0.7, t0);
+  rockGain.gain.setValueAtTime(0.7, t0 + rockDuration - 0.15);
   rockGain.gain.exponentialRampToValueAtTime(0.0001, t0 + rockDuration);
   rockSrc.connect(rockGain).connect(masterGain);
   rockSrc.start(t0, 0, rockDuration);
@@ -203,11 +233,11 @@ export async function playOpeningScore() {
   const logoFilter = c.createBiquadFilter();
   logoFilter.type = "highshelf";
   logoFilter.frequency.value = 5000;
-  logoFilter.gain.value = -7;
+  logoFilter.gain.value = -6;
   const logoGain = c.createGain();
   logoGain.gain.setValueAtTime(0.001, logoStart);
-  logoGain.gain.exponentialRampToValueAtTime(0.36, logoStart + 0.12);
-  logoGain.gain.setValueAtTime(0.36, logoStart + logoDuration - 1.0);
+  logoGain.gain.exponentialRampToValueAtTime(0.55, logoStart + 0.12);
+  logoGain.gain.setValueAtTime(0.55, logoStart + logoDuration - 1.0);
   logoGain.gain.exponentialRampToValueAtTime(0.0001, logoStart + logoDuration);
   logoSrc.connect(logoFilter).connect(logoGain).connect(masterGain);
   logoSrc.start(logoStart, logoOffset, logoDuration);

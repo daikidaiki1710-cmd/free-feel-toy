@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { markIntroSeen, usePrefersReducedMotion, useIntroMode } from "@/lib/useIntroMode";
-import { playOpeningScore, preloadOpeningScore, resumeAudio, setMuted, stopAmbient } from "@/lib/introSound";
+import { playOpeningScore, preloadOpeningScore, resumeAudio, setMuted, stopAmbient, unlockAudio } from "@/lib/introSound";
 import {
   ALREADY_LIT_CENTER,
   BLEND_END,
@@ -254,6 +254,11 @@ export function OpeningSequence({ exitDurationMs }: OpeningSequenceProps) {
   // unlocks audio and launches the single continuous camera-timeline that
   // carries the rest of the sequence.
   async function handleIgnite() {
+    // Must run synchronously, before any await, so the browser still
+    // attributes it to this exact tap gesture — this is what actually
+    // unlocks audible playback on iOS Safari, independent of whether the
+    // real score buffers have finished decoding yet.
+    unlockAudio();
     const ok = await resumeAudio();
     // Rock Cinematic starts immediately (0 -> 6.4s, synced to the final
     // lighting stage), then Epic Hybrid Logo after a 0.15s gap — the
